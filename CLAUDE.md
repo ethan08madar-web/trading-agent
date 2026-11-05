@@ -20,14 +20,14 @@
 
 ## Current Project Status
 
-- **Current Phase:** Design written. Spec: `docs/superpowers/specs/2026-11-05-trading-agent-design.md` (Parts 1–4 approved in chat 2026-11-05).
-- **Current Goal:** Ethan reviews the spec; then writing-plans → build; then a 1-week **paper-money** test.
-- **Current Priority:** Ethan's review of the spec, especially the defaults Claude filled in (earnings 3-day skip, 15% max stop distance, trend sleeve counts toward 4 positions, circuit breaker reset by editing settings).
+- **Current Phase:** Spec approved; implementation plan written: `docs/superpowers/plans/2026-11-05-trading-agent.md` (13 tasks). Its code was extracted and run: 39/39 tests pass.
+- **Current Goal:** Build it (Tasks 0–12), then a 1-week **paper-money** test.
+- **Current Priority:** Ethan picks how to run the plan (subagents or in-session), then start with Task 0 (routine spike, needs Ethan) alongside Tasks 1–9 (no accounts needed).
 - **Current Blockers:**
-  - Unproven: whether a Claude cloud scheduled task can republish the Mission Control Artifact (spec §3.5, setup step 5).
-  - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot.
+  - Unproven: can a Claude cloud routine push to `main` and republish the Mission Control Artifact? (plan Task 0; fallback `notebook/MISSION_CONTROL.md`).
+  - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot (plan Task 11).
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
-- **Recommended Next Task:** Get spec approval, then `superpowers:writing-plans`.
+- **Recommended Next Task:** Execute the plan, Task 1 onward.
 
 *Last updated: 2026-11-05*
 
@@ -80,7 +80,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 
 - [x] Install skills (74) and Python deps
 - [x] Design Parts 1–4 → spec (2026-11-05)
-- [ ] Ethan reviews spec → implementation plan
+- [x] Spec approved → implementation plan (2026-11-05)
 - [x] Private GitHub repo (2026-11-05)
 - [ ] Ethan's accounts (Alpaca paper, FMP free, Telegram)
 - [ ] Build Robot + Claude routines + Mission Control

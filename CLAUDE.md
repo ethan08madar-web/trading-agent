@@ -22,14 +22,14 @@
 
 - **Current Phase:** Built (plan Tasks 1–10, merged to `main` 2026-11-05). 58 tests pass. Not yet run against real Alpaca/Telegram — needs Ethan's accounts.
 - **Current Goal:** Ethan's setup (plan Task 0 spike + Task 11), first real Actions run, then the 1-week **paper-money** test.
-- **Current Priority:** Plan Task 0 — Ethan makes one Claude routine to test pushing to `main` and republishing the Mission Control Artifact.
+- **Current Priority:** Plan Task 11 — Ethan's accounts (Alpaca paper, FMP free, Telegram), one step per message.
 - **Current Blockers:**
-  - Unproven: can a Claude cloud routine push to `main` and republish an Artifact? (plan Task 0; fallback `notebook/MISSION_CONTROL.md`).
+  - Still unproven: a *later* routine run (new session) updating the same Mission Control Artifact by passing its `url`. Same-session republish is proven. Fallback: `notebook/MISSION_CONTROL.md`.
   - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot, GitHub Actions secrets, cloud environment (plan Task 11).
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
 - **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; dashboard says "Paper money test" always.
 - **Known, parked:** trend-sleeve buy crashes the check if the broker returns price 0 (fails safe, ⚠️ alert); a repeating ❌ "failed" order event is sent every check.
-- **Recommended Next Task:** plan Task 0, then Task 11, one step per message.
+- **Recommended Next Task:** plan Task 11 step 1 (Alpaca paper account).
 
 *Last updated: 2026-11-05*
 
@@ -96,6 +96,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-05 | "Team of two": Robot (GitHub Actions, 15 min) + Claude (3 cloud runs/day) | Watches 4× more often than hourly Claude, protects Pro allowance for other projects, no PC needed | All-Claude hourly (burns Pro, hourly only); everything on PC (stops when PC off) |
 | 2026-11-05 | Claude never presses real-money buy/sell; live Robot has no order code | Safety limit; Ethan asked repeatedly (incl. "tell an agent to press it") and was told no each time | Claude/agent with live keys |
 | 2026-11-05 | MindStudio blog guide used only as inspiration | Its `.claude/routines.json` scheduling is unverified; rule limits contradict each other; no `.env` loading | Following it as written |
+| 2026-11-05 | Plan Task 0 spike passed: a cloud routine (Sonnet 5.5, Default env, no connectors) pushed to `main` directly (commit 48e43be) and republished an Artifact twice at the same URL | Proves the Claude-routine half of the design works without the markdown fallback | `claude/*` branch + Robot reading it; markdown-only Mission Control |
 | 2026-11-05 | Swing + small trend sleeve; Careful risk set; Telegram; paper week with Robot trading fake money | Ethan's choices | — |
 
 ## Implementation Notes
@@ -106,6 +107,8 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 - `robot/paper_orders.py` is the only order code; `tests/test_live_guard.py` fails if live mode can reach it (proven by inserting an import).
 - `notebook/settings.yaml` can only tighten the Careful limits (ceilings in `robot/settings.py`). Safety brake reset: raise `breaker_reset` by 1.
 - Workflow `robot.yml` commits `notebook/state.json` + `trades.jsonl` even after a failed check, so a crash can't make the next run repeat a trade.
+- Routines: Claude can create/run cloud routines itself with the `RemoteTrigger` tool (via the `schedule` skill) — don't send Ethan to the claude.ai UI. Environment `env_01FCejMLG8cjQetvPVdwjFMJ` (Default). A brand-new repo needs the Claude GitHub app to see it (github.com/settings/installations → Claude; it was already "All repositories", the first 403 cleared on retry a minute later).
+- Mission Control Artifact: https://claude.ai/artifact/ESeSSp8YhF3xtomyhf89Wu (created by the spike; routines update it by passing this `url`).
 - Subagents can't write files whose name contains "report" (a global write hook) — the controller writes those.
 
 - The source guide (mindstudio.ai/blog/build-ai-trading-agent-claude-code-alpaca) mixes 5%/10%/15% position caps and never calls its `validate_order` — don't copy it.

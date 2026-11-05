@@ -1,0 +1,10 @@
+# Ethan's rules. The Robot refuses limits looser than the "Careful" set (robot/settings.py).
+mode: paper              # paper = Robot places fake trades. live = Telegram alerts only; Ethan trades.
+risk_per_trade: 0.01     # max loss if the stop hits, as a share of the account (max 0.01)
+max_position: 0.30       # max share of the account in one position (max 0.30)
+max_positions: 4         # max open positions, trend sleeve included (max 4)
+max_stop_distance: 0.15  # reject picks whose stop is more than 15% below entry
+week_loss_limit: 0.05    # pause new buys after this loss in a week (max 0.05)
+loss_streak_limit: 3     # pause new buys after this many losses in a row (max 3)
+sleeve_symbol: SPY       # trend sleeve
+breaker_reset: 0         # safety brake on? raise this number by 1 to allow buying again

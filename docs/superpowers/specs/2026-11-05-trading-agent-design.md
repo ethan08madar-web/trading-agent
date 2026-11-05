@@ -88,12 +88,23 @@ Claude **suggests** trades. It does not enforce limits. Every limit is enforced 
     { "symbol": "AAPL", "entry_max": 231.50, "stop": 224.00, "target": 246.00,
       "reason": "Pullback to 20-day average in an uptrend" }
   ],
-  "cancel": ["MSFT"]
+  "cancel": ["MSFT"],
+  "light_falling": false,
+  "sell_earnings": ["NVDA"],
+  "stops": { "NVDA": 118.00 },
+  "fmp_calls": 37
 }
 ```
 
+- `light_falling`: true means yellow allows 0 new positions.
+- `sell_earnings`: held stocks with earnings within 2 days. Claude finds these, and the Robot
+  sells them, so the Robot never needs FMP.
+- `stops`: tighter stops for held stocks. The Robot only ever **raises** a stop.
+- `fmp_calls`: Claude's estimate, shown on Mission Control.
+
 The Robot validates this file. If it is missing, malformed, from an old date, or breaks the
-schema, it counts as **no plan** (see §5).
+schema, it counts as **no plan** (see §5). Claude self-checks with
+`python -m robot.plan <file> <date>` before pushing.
 
 ### 3.3 Robot (`robot/`)
 
@@ -130,9 +141,11 @@ A unit test fails if any live-mode code path imports it or contains an order cal
 
 ### 3.4 Notebook files
 
+All files live under `notebook/`.
+
 | File | Written by | Contents |
 |---|---|---|
-| `settings.yaml` | Ethan (Claude edits only when he asks) | mode, risk limits, exit rules |
+| `settings.yaml` | Ethan (Claude edits only when he asks) | mode, risk limits, `breaker_reset` counter |
 | `plan/YYYY-MM-DD.json` | Claude | §3.2 |
 | `diary/*.md` | Claude | daily and weekly reports |
 | `state.json` | Robot | positions, stops, `last_check` (the heartbeat), loss streak, week P&L, `paused` |
@@ -174,13 +187,18 @@ so the fallback may instead be a Markdown dashboard file in the repo.
 | Max loss per trade if the stop hits | 1% of account equity |
 | Max open positions | 4 (trend sleeve included) |
 | Max in one position | 30% of account equity |
-| Circuit breaker | No new buys after −5% in a calendar week, or after 3 losing trades in a row. Ethan resets it by editing `settings.yaml`. |
+| Circuit breaker | No new buys after −5% in a calendar week, or after 3 losing trades in a row. Ethan resets it by raising `breaker_reset` by 1 in `settings.yaml`. |
 | Market light | 🟢 up to 4 positions · 🟡 up to 2, and nothing new if the light is turning down · 🔴 no new buys |
 | Trend sleeve | Hold SPY (at most 30%) when the light is green and SPY is above its 50-day average |
 | Earnings | Don't buy with earnings within 3 trading days; sell with earnings within 2 days |
 
 **Position size** = `min( floor_to_0.01( 1% equity / (entry_max − stop) ), 30% equity / entry_max )`
-shares. Fractional shares are allowed because the account is small. A pick is rejected if
+shares, also capped by available cash. If the result is 1 share or more, it is rounded down
+to whole shares so a broker stop order can be placed. Below 1 share, it is fractional, rounded
+down to 0.01.
+
+`settings.yaml` can make these limits **stricter, never looser**. The code refuses a file with
+risk > 1%, a position > 30%, more than 4 positions, a weekly limit > 5%, or a loss streak > 3. A pick is rejected if
 `stop >= entry_max`, if the stop is more than 15% below entry, or if the size works out to zero.
 
 ---

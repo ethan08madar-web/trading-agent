@@ -30,7 +30,10 @@ jobs:
           APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m robot.main ${{ inputs.dry_run && '--dry-run' || '' }}
+        # No Alpaca keys yet (setup not finished): skip quietly instead of failing every 15 minutes.
+        run: |
+          if [ -z "$APCA_API_KEY_ID" ]; then echo "No Alpaca keys yet - skipping"; exit 0; fi
+          python -m robot.main ${{ inputs.dry_run && '--dry-run' || '' }}
       # always(): a crashed check can still have placed orders and written state.json; save it so the next run does not repeat a trade.
       - name: Save notebook
         if: ${{ always() && !inputs.dry_run }}

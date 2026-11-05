@@ -1,8 +1,14 @@
 """One Robot check (spec §3.3). Run: python -m robot.main [--dry-run]"""
+import argparse
+import json
+import os
 import re
 from datetime import datetime, timedelta
 
-from robot import safety
+from robot import safety, telegram
+from robot.broker import Broker
+from robot.plan import load_plan
+from robot.settings import load_settings
 
 
 def parse_ts(s):
@@ -142,7 +148,118 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
         state.update(paused=True, pause_reason=reason)
         ev("paused", None, f"⏸️ Safety brake: {reason}. No new buys until breaker_reset is raised in settings.yaml")
 
-    # ENTRIES
+    # -- entries
+    if has_plan and not state["paused"]:
+        open_buys = set() if live else {o["symbol"] for o in orders.open_orders() if o["side"] == "buy"}
+        for sym in plan["cancel"]:
+            if sym in open_buys:
+                orders.cancel_for(sym)
+                open_buys.discard(sym)
+                ev("cancel", sym, f"✖️ {sym}: buy order cancelled (plan)")
+        holding = set(state["positions"]) | open_buys
+        cap = safety.max_positions_for(plan["market_light"], plan["light_falling"], settings)
+        count = len(holding)
+        skip = holding | set(state["bought_today"]) | set(plan["cancel"])
+
+        def buy(sym, qty, limit, note, pending):
+            nonlocal count, cash
+            if live:
+                ev("alert", sym, f"📋 Plan: buy {qty:g} {sym} at up to ${limit:.2f}{note} — place it in the Alpaca app")
+            else:
+                orders.buy_limit(sym, qty, limit)
+                ev("buy", sym, f"✅ Buy order: {qty:g} {sym} at up to ${limit:.2f}{note} (paper)")
+            state["pending"][sym] = pending
+            state["bought_today"].append(sym)
+            count += 1
+            cash -= qty * limit
+
+        sleeve = settings["sleeve_symbol"]
+        if plan["trend_sleeve"]["hold_spy"] and plan["market_light"] == "green" \
+                and sleeve not in skip and count < cap:
+            price = broker.latest_price(sleeve)
+            avg50 = safety.sma(broker.daily_closes(sleeve, 50, today), 50)
+            qty = safety.round_qty(min(settings["max_position"] * equity, cash) / price)
+            if avg50 and price > avg50 and qty > 0:
+                buy(sleeve, qty, round(price * 1.002, 2), " (trend sleeve)", {"sleeve": True})
+        for k in plan["picks"]:
+            sym = k["symbol"]
+            if count >= cap:
+                break
+            if sym in skip:
+                continue
+            qty = safety.position_size(equity, cash, k["entry_max"], k["stop"], settings)
+            if qty <= 0:
+                if once_today(f"{sym}:size"):
+                    ev("skip", sym, f"{sym}: skipped — size works out to 0 (stop too far, or no cash)")
+                continue
+            if broker.latest_price(sym) > k["entry_max"]:
+                continue  # not at our price yet; try again next check
+            buy(sym, qty, k["entry_max"], f", stop ${k['stop']:.2f}", {"stop": k["stop"], "target": k["target"]})
 
     state["last_check"] = now.isoformat()
     return events
+
+
+class DryRunOrders:
+    """Stands in for PaperOrders in --dry-run: prints instead of sending."""
+
+    def open_orders(self):
+        return []
+
+    def buy_limit(self, sym, qty, limit):
+        print("DRY buy", sym, qty, limit)
+
+    def sell_market(self, sym, qty):
+        print("DRY sell", sym, qty)
+
+    def place_stop(self, sym, qty, stop):
+        print("DRY stop", sym, qty, stop)
+
+    def cancel_for(self, sym):
+        print("DRY cancel", sym)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--notebook", default="notebook")
+    ap.add_argument("--dry-run", action="store_true", help="no orders, no files written, no Telegram")
+    args = ap.parse_args(argv)
+    nb, env = args.notebook, os.environ
+    settings = load_settings(os.path.join(nb, "settings.yaml"))
+    broker = Broker(settings["mode"], env["APCA_API_KEY_ID"], env["APCA_API_SECRET_KEY"])
+    clock = broker.clock()
+    if not clock["is_open"]:
+        print("market closed")
+        return 0
+    today = parse_ts(clock["timestamp"]).date().isoformat()
+    plan, plan_errors = load_plan(os.path.join(nb, "plan", f"{today}.json"), today)
+    state_path = os.path.join(nb, "state.json")
+    state = new_state()
+    if os.path.exists(state_path):
+        with open(state_path, encoding="utf-8") as f:
+            state.update(json.load(f))
+    orders = None
+    if settings["mode"] == "paper":
+        if args.dry_run:
+            orders = DryRunOrders()
+        else:
+            from robot.paper_orders import PaperOrders  # only ever imported in paper mode (spec §3.3)
+            orders = PaperOrders(env["APCA_API_KEY_ID"], env["APCA_API_SECRET_KEY"])
+    events = run_check(settings, clock, plan, plan_errors, state, broker, orders)
+    for e in events:
+        print(e["text"])
+    if args.dry_run:
+        return 0
+    with open(state_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(state, f, indent=2, sort_keys=True, ensure_ascii=False)
+        f.write("\n")
+    with open(os.path.join(nb, "trades.jsonl"), "a", encoding="utf-8", newline="\n") as f:
+        for e in events:
+            f.write(json.dumps({"time": state["last_check"], **e}, ensure_ascii=False) + "\n")
+    for e in events:
+        telegram.send(env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID"), e["text"])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

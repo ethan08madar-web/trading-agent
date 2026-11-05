@@ -28,6 +28,7 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
 4. Held positions (`state.json` → `positions`):
    - earnings within 2 days → put it in `sell_earnings`
    - a better stop (higher only) → put it in `stops`
+   - Any held position with `stop: null` in state.json must get a stop in `stops` today.
 5. Trend sleeve: `"hold_spy": true` only if the light is green and SPY is above its 50-day average.
 6. Write `notebook/plan/<today>.json` (today = America/New_York date):
 

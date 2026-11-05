@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from datetime import datetime, timedelta
 
 from robot import safety, telegram
@@ -65,7 +66,9 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
     for sym in [s for s in state["positions"] if s not in held]:
         m = state["positions"].pop(sym)
         # ponytail: exit = last price we saw, not the real fill; read FILL activities if this matters
-        exit_px = state["last_prices"].pop(sym, m["entry"])
+        last = state["last_prices"].pop(sym, m["entry"])
+        # a broker stop can fill below the last price we saw; our own sells record their price
+        exit_px = m.get("exit_price") or (min(last, m["stop"]) if m["stop"] else last)
         if not m["sleeve"]:
             state["loss_streak"] = state["loss_streak"] + 1 if safety.is_loss(m["entry"], exit_px) else 0
         ev("closed", sym, f"{sym} closed near ${exit_px:.2f} (entry ${m['entry']:.2f})")
@@ -90,8 +93,10 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
     # -- exits
     sold = set()
 
-    def sell(sym, qty, why, icon):
+    def sell(sym, qty, why, icon, price):
         sold.add(sym)
+        if qty == float(held[sym]["qty"]):
+            state["positions"][sym]["exit_price"] = price  # full exit: the price we sold at
         if live:
             if once_today(f"{sym}:{why}"):
                 ev("alert", sym, f"{icon} {sym}: {why} — sell {qty:g} in the Alpaca app")
@@ -104,26 +109,28 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
         qty = float(held[sym]["qty"])
         price = broker.latest_price(sym)
         state["last_prices"][sym] = price
+        if not m["half_sold"]:
+            m["entry"] = float(held[sym]["avg_entry_price"])  # a partial fill moves the average
         if m["sleeve"]:
             avg50 = safety.sma(broker.daily_closes(sym, 50, today), 50) if end_of_day else None
             if avg50 and price < avg50:
-                sell(sym, qty, "closed below its 50-day average", "📉")
+                sell(sym, qty, "closed below its 50-day average", "📉", price)
             continue
         new_stop = plan["stops"].get(sym)
         if new_stop and (m["stop"] is None or new_stop > m["stop"]):
             m["stop"] = new_stop  # stops only ever move up
         avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20) if end_of_day else None
         if m["stop"] and price <= m["stop"]:
-            sell(sym, qty, f"stop ${m['stop']:.2f} hit", "🛑")
+            sell(sym, qty, f"stop ${m['stop']:.2f} hit", "🛑", price)
         elif sym in plan["sell_earnings"]:
-            sell(sym, qty, "earnings within 2 days", "📅")
+            sell(sym, qty, "earnings within 2 days", "📅", price)
         elif avg20 and price < avg20:
-            sell(sym, qty, "below its 20-day average at the close", "📉")
+            sell(sym, qty, "below its 20-day average at the close", "📉", price)
         elif m["target"] and not m["half_sold"] and price >= m["target"]:
             half = safety.round_qty(qty / 2)
             m.update(half_sold=True, stop=m["entry"])
             if half > 0:
-                sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}", "🎯")
+                sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}", "🎯", price)
 
     # -- broker stop orders (paper, whole shares; fractional ones are checked above every run)
     if not live:
@@ -134,7 +141,8 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
                 continue
             mine = [o for o in open_orders if o["symbol"] == sym and o["side"] == "sell"]
             stops = [o for o in mine if o["type"] == "stop"]
-            if stops and abs(float(stops[0]["stop_price"]) - m["stop"]) < 0.005:
+            if stops and abs(float(stops[0]["stop_price"]) - m["stop"]) < 0.005 \
+                    and int(float(stops[0]["qty"])) == int(qty):
                 continue
             if mine:
                 # ponytail: stop moved -> cancel now, place the new one next check once the cancel settles
@@ -220,6 +228,7 @@ class DryRunOrders:
 
 
 def main(argv=None):
+    sys.stdout.reconfigure(encoding="utf-8")  # emoji in event text; Windows consoles default to cp1252
     ap = argparse.ArgumentParser()
     ap.add_argument("--notebook", default="notebook")
     ap.add_argument("--dry-run", action="store_true", help="no orders, no files written, no Telegram")
@@ -245,17 +254,25 @@ def main(argv=None):
         else:
             from robot.paper_orders import PaperOrders  # only ever imported in paper mode (spec §3.3)
             orders = PaperOrders(env["APCA_API_KEY_ID"], env["APCA_API_SECRET_KEY"])
-    events = run_check(settings, clock, plan, plan_errors, state, broker, orders)
+    events = []
+    try:
+        events = run_check(settings, clock, plan, plan_errors, state, broker, orders)
+    finally:
+        # saved even if run_check raised: an order may already have gone out
+        if not args.dry_run:
+            tmp = state_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(state, f, indent=2, sort_keys=True, ensure_ascii=False)
+                f.write("\n")
+            os.replace(tmp, state_path)
+            if events:
+                with open(os.path.join(nb, "trades.jsonl"), "a", encoding="utf-8", newline="\n") as f:
+                    for e in events:
+                        f.write(json.dumps({"time": state["last_check"], **e}, ensure_ascii=False) + "\n")
     for e in events:
         print(e["text"])
     if args.dry_run:
         return 0
-    with open(state_path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(state, f, indent=2, sort_keys=True, ensure_ascii=False)
-        f.write("\n")
-    with open(os.path.join(nb, "trades.jsonl"), "a", encoding="utf-8", newline="\n") as f:
-        for e in events:
-            f.write(json.dumps({"time": state["last_check"], **e}, ensure_ascii=False) + "\n")
     for e in events:
         telegram.send(env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID"), e["text"])
     return 0

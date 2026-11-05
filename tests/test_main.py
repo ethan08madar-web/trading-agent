@@ -195,5 +195,73 @@ class EntryTest(unittest.TestCase):
         self.assertIn("Alpaca app", ev[0]["text"])
 
 
+class LossStreakTest(unittest.TestCase):
+    def test_broker_stop_fired_between_checks_counts_as_loss(self):
+        # last price seen (49.9) was above the stop and above the loss line (49.75), so the old
+        # code counted it as a win; the broker stop filled at 47.5, which is a loss
+        st = state_with(positions={"ABC": meta()}, last_prices={"ABC": 49.9})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({}, []), FakeOrders())
+        self.assertEqual(st["loss_streak"], 1)
+
+    def test_earnings_sale_records_price_sold_at(self):
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(sell_earnings=["ABC"]), [], st,
+                  FakeBroker({"ABC": 49.8}, [holding()]), FakeOrders())
+        run_check(S, OPEN, plan(), [], st, FakeBroker({}, []), FakeOrders())
+        self.assertEqual(st["loss_streak"], 0)  # 49.8 is not below 50 * 0.995
+
+
+class PartialFillTest(unittest.TestCase):
+    def test_stop_order_with_smaller_qty_is_replaced(self):
+        o = FakeOrders(open_orders=[{"symbol": "ABC", "side": "sell", "type": "stop",
+                                     "stop_price": "47.50", "qty": "2"}])
+        run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}),
+                  FakeBroker({"ABC": 49.0}, [holding()]), o)
+        self.assertIn(("cancel", "ABC"), o.calls)
+        self.assertEqual([c for c in o.calls if c[0] == "stop"], [])
+
+    def test_entry_follows_broker_average_price(self):
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 49.0}, [holding(entry="48")]), FakeOrders())
+        self.assertEqual(st["positions"]["ABC"]["entry"], 48.0)
+
+
+class MainCliTest(unittest.TestCase):
+    def test_state_saved_when_run_check_raises(self):
+        import json
+        import os
+        import pathlib
+        import tempfile
+        from unittest import mock
+
+        from robot import main
+
+        class FB:
+            def __init__(self, *a): pass
+            def clock(self): return OPEN
+            def account(self): return {"equity": "1000", "cash": "1000"}
+            def positions(self): return [holding()]
+            def latest_price(self, s): raise RuntimeError("boom")
+            def daily_closes(self, s, n, before): return []
+
+        class FakePO:
+            def __init__(self, *a): pass
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        nb = pathlib.Path(tempfile.mkdtemp())
+        (nb / "settings.yaml").write_text((root / "notebook" / "settings.yaml").read_text(encoding="utf-8"),
+                                          encoding="utf-8")
+        (nb / "state.json").write_text(json.dumps({"date": "2026-11-08", "week": "2026-W46",
+                                                   "week_start_equity": 1000.0}), encoding="utf-8")
+        env = {"APCA_API_KEY_ID": "x", "APCA_API_SECRET_KEY": "y"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(main, "Broker", FB), \
+                mock.patch.object(main.telegram, "send", lambda *a: True), \
+                mock.patch("robot.paper_orders.PaperOrders", FakePO):
+            with self.assertRaises(RuntimeError):
+                main.main(["--notebook", str(nb)])
+        saved = json.loads((nb / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["date"], "2026-11-09")
+
+
 if __name__ == "__main__":
     unittest.main()

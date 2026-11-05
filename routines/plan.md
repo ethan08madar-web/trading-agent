@@ -9,9 +9,9 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
 - Write only `notebook/plan/<today>.json`, `notebook/diary/*.md`, and Mission Control (`mission-control.html` is never committed; `notebook/MISSION_CONTROL.md` only as the fallback). Never write keys or tokens anywhere.
 - Free FMP plan: at most ~200 FMP calls per day across all runs. Count your FMP-using script runs.
 - `<today>` always means today's date in America/New_York.
-- If the US stock market is closed today (weekend or holiday — check Alpaca's clock/calendar), send nothing, commit nothing, and stop.
+- Plan, adjust and daily report runs only: if the US stock market is closed today (weekend or holiday — check Alpaca's clock/calendar), send nothing, commit nothing, and stop. The weekly review always runs.
 - Never paste URLs, raw error output or API responses into any file or message — keys and tokens live inside URLs.
-- Stage only the files you wrote, by path (never `git add -A` or `git add .`). Push with `git pull --rebase` then `git push`; if that fails, retry once. Only send a "ready" Telegram message after the push succeeded; if it didn't, send "⚠️ Plan not saved: push failed" instead.
+- Stage only the files you wrote, by path (never `git add -A` or `git add .`). Push with `git pull --rebase` then `git push`; if that fails, retry once. Only send a "ready" Telegram message after the push succeeded; if it didn't, send "⚠️ <plan/diary/review> not saved: push failed" instead.
 
 ## Steps
 1. `git pull`. Read `notebook/settings.yaml`, `notebook/state.json`, the last 50 lines of

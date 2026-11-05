@@ -13,6 +13,11 @@ Notable changes to **this project**, newest first. One dated block per working s
 - The Robot (`robot/`): settings with Careful ceilings, safety maths, plan validation, read-only broker, paper-only orders, Telegram, the 15-minute check with crash-safe state, Mission Control generator. 58 tests.
 - GitHub Actions: `robot.yml` (every 15 min, weekdays) and `tests.yml`.
 - Claude routine prompts: `routines/plan.md`, `adjust.md`, `report.md`, `weekly.md`.
+- Routine spike passed: a cloud routine pushed to `main` and republished an Artifact at the same URL.
+- Alpaca paper keys + Telegram bot wired via GitHub secrets; first real Robot run succeeded.
+
+### Changed
+- `robot.yml` skips quietly until Alpaca keys exist (no failure emails during setup).
 - Project created; CLAUDE.md with agreed design (Parts 1–2), decisions, risk rules.
 - All 74 skills from tradermonty/claude-trading-skills (MIT, d8e71ce) in `.claude/skills/`, safety-scanned (no order placement code).
 - `.gitignore` for `.env`, `state/`.

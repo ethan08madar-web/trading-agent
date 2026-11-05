@@ -12,7 +12,7 @@ def _num(v):
 
 
 def _symbols(v):
-    return isinstance(v, list) and all(isinstance(x, str) and SYMBOL.match(x) for x in v)
+    return isinstance(v, list) and all(isinstance(x, str) and SYMBOL.fullmatch(x) for x in v)
 
 
 def validate_plan(p, today):
@@ -30,7 +30,7 @@ def validate_plan(p, today):
         errs.append("picks must be a list")
         picks = []
     for i, k in enumerate(picks):
-        if not isinstance(k, dict) or not isinstance(k.get("symbol"), str) or not SYMBOL.match(k["symbol"]):
+        if not isinstance(k, dict) or not isinstance(k.get("symbol"), str) or not SYMBOL.fullmatch(k["symbol"]):
             errs.append(f"pick {i}: bad symbol")
         elif not all(_num(k.get(f)) for f in ("entry_max", "stop", "target")):
             errs.append(f"pick {i} {k['symbol']}: entry_max, stop, target must be positive numbers")

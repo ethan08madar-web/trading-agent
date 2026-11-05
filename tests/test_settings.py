@@ -39,6 +39,7 @@ class SettingsTest(unittest.TestCase):
             ("risk_per_trade: 0.01", "risk_per_trade: 0.02"),   # looser than Careful
             ("max_positions: 4", "max_positions: 5"),
             ("week_loss_limit: 0.05", "week_loss_limit: 0.10"),
+            ("max_stop_distance: 0.15", "max_stop_distance: 0.20"),   # spec 4: reject stops over 15%
             ("loss_streak_limit: 3", "loss_streak_limit: true"),
             ("sleeve_symbol: SPY\n", ""),
         ]:

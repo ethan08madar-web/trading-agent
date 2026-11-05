@@ -23,13 +23,24 @@ def new_state():
             "positions": {}, "pending": {}, "bought_today": [], "alerted": {}, "last_prices": {}}
 
 
-def run_check(settings, clock, plan, plan_errors, state, broker, orders):
+def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=None):
     """One check while the market is open. orders is None in live mode.
-    Mutates state; returns events [{type, symbol, text}]."""
-    events = []
+    Mutates state; appends to and returns events [{type, symbol, text}] (the caller can pass
+    its own list so events survive a crash)."""
+    events = [] if events is None else events
 
     def ev(kind, sym, text):
         events.append({"type": kind, "symbol": sym, "text": text})
+
+    def attempt(sym, what, fn, *args):
+        """One order call; a failure is reported and the check carries on. No exception text:
+        it can contain URLs."""
+        try:
+            fn(*args)
+            return True
+        except Exception as e:
+            ev("failed", sym, f"❌ {sym}: {what} failed ({type(e).__name__}) — will retry next check")
+            return False
 
     live = settings["mode"] == "live"
     now = parse_ts(clock["timestamp"])
@@ -46,7 +57,7 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
 
     # -- day / week bookkeeping
     if state["date"] != today:
-        state.update(date=today, bought_today=[], pending={}, alerted={})
+        state.update(date=today, bought_today=[], alerted={})
     week = "%d-W%02d" % now.isocalendar()[:2]
     if state["week"] != week:
         state.update(week=week, week_start_equity=equity)
@@ -86,28 +97,47 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
             m.update(stop=src["stop"], target=src["target"])
         elif sym == settings["sleeve_symbol"]:
             m["sleeve"] = True
-        else:
-            ev("problem", sym, f"⚠️ {sym}: no stop on record for this position — check it")
         state["positions"][sym] = m
+        ev("filled", sym, f"📥 {sym}: filled {float(p['qty']):g} at ${m['entry']:.2f}")
+
+    # -- buys that never filled: forget them (kept across midnight so a late fill still gets its stop)
+    open_buys = set() if live else {o["symbol"] for o in orders.open_orders() if o["side"] == "buy"}
+    for sym in list(state["pending"]):
+        if live:  # no open-order list in live mode
+            since = datetime.fromisoformat(state["pending"][sym].get("since", today)).date()
+            gone = (now.date() - since).days >= 3
+        else:
+            gone = sym not in open_buys
+        if gone:
+            del state["pending"][sym]
 
     # -- exits
     sold = set()
 
     def sell(sym, qty, why, icon, price):
-        sold.add(sym)
-        if qty == float(held[sym]["qty"]):
-            state["positions"][sym]["exit_price"] = price  # full exit: the price we sold at
+        """True if the sell went out (live: was alerted)."""
         if live:
             if once_today(f"{sym}:{why}"):
                 ev("alert", sym, f"{icon} {sym}: {why} — sell {qty:g} in the Alpaca app")
-            return
-        orders.cancel_for(sym)
-        orders.sell_market(sym, qty)
-        ev("sell", sym, f"{icon} {sym}: {why} — sold {qty:g} (paper)")
+        elif not (attempt(sym, "cancelling its orders", orders.cancel_for, sym)
+                  and attempt(sym, "sell", orders.sell_market, sym, qty)):
+            return False
+        else:
+            ev("sell", sym, f"{icon} {sym}: {why} — sold {qty:g} (paper)")
+        sold.add(sym)
+        if qty == float(held[sym]["qty"]):
+            state["positions"][sym]["exit_price"] = price  # full exit: the price we sold at
+            state["bought_today"].append(sym)  # a stopped-out stock is not re-bought today
+        return True
 
     for sym, m in state["positions"].items():
         qty = float(held[sym]["qty"])
+        m.pop("exit_price", None)  # only a sell from this check counts
         price = broker.latest_price(sym)
+        if price <= 0:  # bad data (spec 5): never act on it
+            if once_today(f"{sym}:price"):
+                ev("problem", sym, f"⚠️ {sym}: no usable price from the broker — skipping it this check")
+            continue
         state["last_prices"][sym] = price
         if not m["half_sold"]:
             m["entry"] = float(held[sym]["avg_entry_price"])  # a partial fill moves the average
@@ -119,6 +149,8 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
         new_stop = plan["stops"].get(sym)
         if new_stop and (m["stop"] is None or new_stop > m["stop"]):
             m["stop"] = new_stop  # stops only ever move up
+        if m["stop"] is None:  # every check, so it cannot go quiet
+            ev("problem", sym, f"⚠️ {sym}: no stop on record for this position — check it")
         avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20) if end_of_day else None
         if m["stop"] and price <= m["stop"]:
             sell(sym, qty, f"stop ${m['stop']:.2f} hit", "🛑", price)
@@ -128,9 +160,9 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
             sell(sym, qty, "below its 20-day average at the close", "📉", price)
         elif m["target"] and not m["half_sold"] and price >= m["target"]:
             half = safety.round_qty(qty / 2)
-            m.update(half_sold=True, stop=m["entry"])
-            if half > 0:
-                sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}", "🎯", price)
+            if half <= 0 or sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}",
+                                 "🎯", price):
+                m.update(half_sold=True, stop=m["entry"])
 
     # -- broker stop orders (paper, whole shares; fractional ones are checked above every run)
     if not live:
@@ -146,9 +178,9 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
                 continue
             if mine:
                 # ponytail: stop moved -> cancel now, place the new one next check once the cancel settles
-                orders.cancel_for(sym)
+                attempt(sym, "cancelling its old stop", orders.cancel_for, sym)
                 continue
-            orders.place_stop(sym, int(qty), m["stop"])
+            attempt(sym, "placing its stop", orders.place_stop, sym, int(qty), m["stop"])
 
     # -- safety brake
     reason = safety.breaker_reason(equity, state["week_start_equity"], state["loss_streak"], settings)
@@ -158,10 +190,8 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
 
     # -- entries
     if has_plan and not state["paused"]:
-        open_buys = set() if live else {o["symbol"] for o in orders.open_orders() if o["side"] == "buy"}
         for sym in plan["cancel"]:
-            if sym in open_buys:
-                orders.cancel_for(sym)
+            if sym in open_buys and attempt(sym, "cancelling its buy order", orders.cancel_for, sym):
                 open_buys.discard(sym)
                 ev("cancel", sym, f"✖️ {sym}: buy order cancelled (plan)")
         holding = set(state["positions"]) | open_buys
@@ -173,10 +203,11 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
             nonlocal count, cash
             if live:
                 ev("alert", sym, f"📋 Plan: buy {qty:g} {sym} at up to ${limit:.2f}{note} — place it in the Alpaca app")
-            else:
-                orders.buy_limit(sym, qty, limit)
+            elif attempt(sym, "buy order", orders.buy_limit, sym, qty, limit):
                 ev("buy", sym, f"✅ Buy order: {qty:g} {sym} at up to ${limit:.2f}{note} (paper)")
-            state["pending"][sym] = pending
+            else:
+                return
+            state["pending"][sym] = {**pending, "since": today}
             state["bought_today"].append(sym)
             count += 1
             cash -= qty * limit
@@ -200,8 +231,9 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders):
                 if once_today(f"{sym}:size"):
                     ev("skip", sym, f"{sym}: skipped — size works out to 0 (stop too far, or no cash)")
                 continue
-            if broker.latest_price(sym) > k["entry_max"]:
-                continue  # not at our price yet; try again next check
+            price = broker.latest_price(sym)
+            if not k["stop"] < price <= k["entry_max"]:
+                continue  # not at our price yet (or already through the stop); try again next check
             buy(sym, qty, k["entry_max"], f", stop ${k['stop']:.2f}", {"stop": k["stop"], "target": k["target"]})
 
     state["last_check"] = now.isoformat()
@@ -254,9 +286,9 @@ def main(argv=None):
         else:
             from robot.paper_orders import PaperOrders  # only ever imported in paper mode (spec §3.3)
             orders = PaperOrders(env["APCA_API_KEY_ID"], env["APCA_API_SECRET_KEY"])
-    events = []
+    events = []  # filled in place so the finally block can log them even if run_check raises
     try:
-        events = run_check(settings, clock, plan, plan_errors, state, broker, orders)
+        run_check(settings, clock, plan, plan_errors, state, broker, orders, events)
     finally:
         # saved even if run_check raised: an order may already have gone out
         if not args.dry_run:

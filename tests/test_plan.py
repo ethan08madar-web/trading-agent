@@ -37,6 +37,8 @@ class PlanTest(unittest.TestCase):
             "bad light": {**GOOD, "market_light": "blue"},
             "stop above entry": {**GOOD, "picks": [{**GOOD["picks"][0], "stop": 240.0}]},
             "bad symbol": {**GOOD, "picks": [{**GOOD["picks"][0], "symbol": "aapl;rm"}]},
+            "trailing newline": {**GOOD, "picks": [{**GOOD["picks"][0], "symbol": "AAPL\n"}]},
+            "newline in cancel": {**GOOD, "cancel": ["AAPL\n"]},
             "bool price": {**GOOD, "picks": [{**GOOD["picks"][0], "target": True}]},
             "bad stops": {**GOOD, "stops": {"AAPL": "high"}},
             "bad sleeve": {**GOOD, "trend_sleeve": {"hold_spy": "yes"}},

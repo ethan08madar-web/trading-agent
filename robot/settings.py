@@ -5,7 +5,7 @@ Loosening one is a code change on purpose, not a typo in a YAML file."""
 import yaml
 
 FLOATS = {"risk_per_trade": 0.01, "max_position": 0.30,
-          "max_stop_distance": 0.25, "week_loss_limit": 0.05}
+          "max_stop_distance": 0.15, "week_loss_limit": 0.05}
 INTS = {"max_positions": (1, 4), "loss_streak_limit": (1, 3), "breaker_reset": (0, 10**6)}
 
 

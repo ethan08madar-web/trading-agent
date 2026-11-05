@@ -18,7 +18,7 @@ class FB:
                              "next_close": "2026-11-09T16:00:00-05:00"}
     def account(self): return {"equity": "1000", "cash": "1000"}
     def positions(self): return [{"symbol": "ABC", "qty": "4", "avg_entry_price": "50"}]
-    def latest_price(self, s): return 40.0
+    def latest_price(self, s): return 49.0 if s == "XYZ" else 40.0
     def daily_closes(self, s, n, before): return []
 
 os.environ.update(APCA_API_KEY_ID="x", APCA_API_SECRET_KEY="y")

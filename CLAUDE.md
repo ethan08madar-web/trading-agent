@@ -9,7 +9,7 @@
 **New session? Do this before anything else:**
 
 1. `git status` and `git log --oneline -5` — see what's uncommitted.
-2. `git fetch` — report if the remote is ahead. (No remote yet — see blockers.)
+2. `git fetch` — report if the remote is ahead. Remote: private `github.com/ethan08madar-web/trading-agent`.
 3. Read **Current Project Status** below.
 4. Read the newest file in `session-logs/`.
 5. Report back: current state, goal, priorities, blockers, and where the last session said to pick up. Then start.
@@ -24,7 +24,6 @@
 - **Current Goal:** Finish the design (Parts 3–4), write the spec to `docs/superpowers/specs/`, get Ethan's review, then write the implementation plan. Then a 1-week **paper-money** test.
 - **Current Priority:** Show Ethan Part 3 (Mission Control page, Telegram messages, what happens when something breaks) — draft is in the 2026-11-05 session log.
 - **Current Blockers:**
-  - No GitHub remote yet. Creating the private repo needs Ethan's OK (repo creation is an ask-first action).
   - Unproven: whether a Claude cloud scheduled task can republish the Mission Control Artifact. Must be tested before building around it.
   - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot.
 - **Recommended Next Task:** Present design Part 3, then Part 4 (test week, going to real money, setup steps), then write the spec.
@@ -80,7 +79,8 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 
 - [x] Install skills (74) and Python deps
 - [ ] Design Parts 3–4 → spec → plan
-- [ ] Private GitHub repo + Ethan's accounts (Alpaca paper, FMP free, Telegram)
+- [x] Private GitHub repo (2026-11-05)
+- [ ] Ethan's accounts (Alpaca paper, FMP free, Telegram)
 - [ ] Build Robot + Claude routines + Mission Control
 - [ ] 1-week paper test → decide on FMP paid and real money
 
@@ -98,4 +98,3 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 
 - The source guide (mindstudio.ai/blog/build-ai-trading-agent-claude-code-alpaca) mixes 5%/10%/15% position caps and never calls its `validate_order` — don't copy it.
 - `trader-memory-core`'s CLI wrapper expects the upstream repo layout; call its scripts directly (e.g. `thesis_store.py --state-dir <dir> list`).
-- Copies of `trader-memory-core` and `signal-postmortem` also sit in `~/.claude/skills/` (global) from earlier in the session; a safety check blocked deleting them. Ethan may delete them by hand.

@@ -48,7 +48,7 @@ See CLAUDE.md Important Decisions table. Key: Way 2 team-of-two (rejected all-Cl
 
 - Design Part 3 was drafted but **not shown** to Ethan (he left for a workout). Draft below.
 - Part 4 not drafted: test week plan, how to go to real money, Ethan's one-step-at-a-time setup (GitHub private repo, Alpaca paper keys, FMP free key, Telegram bot).
-- No GitHub remote — creating the repo needs Ethan's OK. Nothing pushed.
+- ~~No GitHub remote~~ Done after wrap-up: private repo `ethan08madar-web/trading-agent` created in Chrome, pushed, unauthenticated API → 404 (private). Duplicate global skill copies deleted with Ethan's OK. Global rules 1.42.0: new projects always get a private repo; two Windows gotchas.
 - Spec + implementation plan not written.
 
 ### Part 3 draft (show Ethan next)

@@ -9,6 +9,10 @@ Notable changes to **this project**, newest first. One dated block per working s
 ## 2026-11-05
 
 ### Added
+- Design spec + implementation plan (`docs/superpowers/`).
+- The Robot (`robot/`): settings with Careful ceilings, safety maths, plan validation, read-only broker, paper-only orders, Telegram, the 15-minute check with crash-safe state, Mission Control generator. 58 tests.
+- GitHub Actions: `robot.yml` (every 15 min, weekdays) and `tests.yml`.
+- Claude routine prompts: `routines/plan.md`, `adjust.md`, `report.md`, `weekly.md`.
 - Project created; CLAUDE.md with agreed design (Parts 1–2), decisions, risk rules.
 - All 74 skills from tradermonty/claude-trading-skills (MIT, d8e71ce) in `.claude/skills/`, safety-scanned (no order placement code).
 - `.gitignore` for `.env`, `state/`.

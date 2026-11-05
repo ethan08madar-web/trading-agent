@@ -1,0 +1,403 @@
+import unittest
+
+from robot.main import new_state, run_check
+
+S = {"mode": "paper", "risk_per_trade": 0.01, "max_position": 0.30, "max_positions": 4,
+     "max_stop_distance": 0.15, "week_loss_limit": 0.05, "loss_streak_limit": 3,
+     "sleeve_symbol": "SPY", "breaker_reset": 0}
+LIVE = {**S, "mode": "live"}
+OPEN = {"is_open": True, "timestamp": "2026-11-09T10:00:00.123456789-05:00",
+        "next_close": "2026-11-09T16:00:00-05:00"}
+LATE = {**OPEN, "timestamp": "2026-11-09T15:50:00-05:00"}
+PICK = {"symbol": "ABC", "entry_max": 50.0, "stop": 47.5, "target": 56.0, "reason": "x"}
+
+
+def plan(**kw):
+    p = {"date": "2026-11-09", "market_light": "green", "light_falling": False, "picks": [],
+         "cancel": [], "sell_earnings": [], "stops": {}, "trend_sleeve": {"hold_spy": False}}
+    p.update(kw)
+    return p
+
+
+def holding(sym="ABC", qty="4", entry="50"):
+    return {"symbol": sym, "qty": qty, "avg_entry_price": entry}
+
+
+def meta(**kw):
+    m = {"entry": 50.0, "stop": 47.5, "target": 56.0, "half_sold": False, "sleeve": False}
+    m.update(kw)
+    return m
+
+
+class FakeBroker:
+    def __init__(self, prices=None, positions=None, equity=1000.0, cash=1000.0, closes=None):
+        self.prices, self.pos = prices or {}, positions or []
+        self.equity, self.cash, self.closes = equity, cash, closes or {}
+
+    def account(self):
+        return {"equity": str(self.equity), "cash": str(self.cash)}
+
+    def positions(self):
+        return self.pos
+
+    def latest_price(self, sym):
+        return self.prices[sym]
+
+    def daily_closes(self, sym, n, before):
+        return self.closes.get(sym, [])[-n:]
+
+
+class FakeOrders:
+    def __init__(self, open_orders=None):
+        self.calls, self.open = [], open_orders or []
+
+    def open_orders(self):
+        return self.open
+
+    def buy_limit(self, s, q, l):
+        self.calls.append(("buy", s, q, l))
+
+    def sell_market(self, s, q):
+        self.calls.append(("sell", s, q))
+
+    def place_stop(self, s, q, p):
+        self.calls.append(("stop", s, q, p))
+
+    def cancel_for(self, s):
+        self.calls.append(("cancel", s))
+
+
+def state_with(**kw):
+    st = new_state()
+    st.update(date="2026-11-09", week="2026-W46", week_start_equity=1000.0)
+    st.update(kw)
+    return st
+
+
+class ExitTest(unittest.TestCase):
+    def test_stop_hit_cancels_then_sells(self):
+        o = FakeOrders()
+        st = state_with(positions={"ABC": meta()})
+        ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 47.0}, [holding()]), o)
+        self.assertEqual(o.calls[:2], [("cancel", "ABC"), ("sell", "ABC", 4.0)])
+        self.assertTrue(any("🛑" in e["text"] for e in ev))
+
+    def test_target_sells_half_and_moves_stop(self):
+        o = FakeOrders()
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 56.5}, [holding()]), o)
+        self.assertIn(("sell", "ABC", 2), o.calls)
+        self.assertEqual(st["positions"]["ABC"]["stop"], 50.0)
+        self.assertTrue(st["positions"]["ABC"]["half_sold"])
+
+    def test_below_20_day_average_only_at_close(self):
+        b = FakeBroker({"ABC": 49.0}, [holding()], closes={"ABC": [52.0] * 20})
+        o = FakeOrders()
+        run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}), b, o)
+        self.assertNotIn(("sell", "ABC", 4.0), o.calls)
+        o = FakeOrders()
+        run_check(S, LATE, plan(), [], state_with(positions={"ABC": meta()}), b, o)
+        self.assertIn(("sell", "ABC", 4.0), o.calls)
+
+    def test_earnings_sell_and_plan_stop_only_moves_up(self):
+        o = FakeOrders()
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(stops={"ABC": 40.0}), [], st, FakeBroker({"ABC": 49.0}, [holding()]), o)
+        self.assertEqual(st["positions"]["ABC"]["stop"], 47.5)
+        run_check(S, OPEN, plan(sell_earnings=["ABC"]), [], st, FakeBroker({"ABC": 49.0}, [holding()]), o)
+        self.assertIn(("sell", "ABC", 4.0), o.calls)
+
+    def test_places_broker_stop_for_whole_shares_only(self):
+        o = FakeOrders()
+        run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}),
+                  FakeBroker({"ABC": 49.0}, [holding()]), o)
+        self.assertIn(("stop", "ABC", 4, 47.5), o.calls)
+        o = FakeOrders()
+        run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}),
+                  FakeBroker({"ABC": 49.0}, [holding(qty="0.6")]), o)
+        self.assertEqual([c for c in o.calls if c[0] == "stop"], [])
+
+    def test_closed_loss_counts_and_trips_breaker(self):
+        st = state_with(positions={"ABC": meta()}, last_prices={"ABC": 47.0}, loss_streak=2)
+        ev = run_check(S, OPEN, plan(), [], st, FakeBroker({}, []), FakeOrders())
+        self.assertEqual(st["loss_streak"], 3)
+        self.assertTrue(st["paused"])
+        self.assertTrue(any(e["type"] == "paused" for e in ev))
+
+    def test_new_fill_takes_stop_from_pending(self):
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0}})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 50.0}, [holding()]), FakeOrders())
+        self.assertEqual(st["positions"]["ABC"]["stop"], 47.5)
+        self.assertEqual(st["pending"], {})
+
+    def test_unknown_position_warns(self):
+        st = state_with()
+        ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"XYZ": 10.0}, [holding("XYZ")]), FakeOrders())
+        self.assertTrue(any(e["type"] == "problem" and e["symbol"] == "XYZ" for e in ev))
+
+    def test_no_plan_warns_once_a_day(self):
+        st = state_with()
+        ev1 = run_check(S, OPEN, None, ["cannot read plan"], st, FakeBroker(), FakeOrders())
+        ev2 = run_check(S, OPEN, None, ["cannot read plan"], st, FakeBroker(), FakeOrders())
+        self.assertEqual([e["type"] for e in ev1], ["problem"])
+        self.assertEqual(ev2, [])
+
+    def test_live_mode_alerts_once_and_needs_no_orders(self):
+        st = state_with(positions={"ABC": meta()})
+        ev1 = run_check(LIVE, OPEN, plan(), [], st, FakeBroker({"ABC": 47.0}, [holding()]), None)
+        ev2 = run_check(LIVE, OPEN, plan(), [], st, FakeBroker({"ABC": 47.0}, [holding()]), None)
+        self.assertIn("Alpaca app", ev1[0]["text"])
+        self.assertEqual(ev2, [])
+
+
+class EntryTest(unittest.TestCase):
+    def test_buys_pick_at_or_below_entry(self):
+        o, st = FakeOrders(), state_with()
+        run_check(S, OPEN, plan(picks=[PICK]), [], st, FakeBroker({"ABC": 49.8}), o)
+        self.assertEqual(o.calls, [("buy", "ABC", 4, 50.0)])
+        self.assertEqual(st["pending"]["ABC"], {"stop": 47.5, "target": 56.0, "since": "2026-11-09"})
+        o2 = FakeOrders()
+        run_check(S, OPEN, plan(picks=[PICK]), [], st, FakeBroker({"ABC": 49.8}), o2)
+        self.assertEqual(o2.calls, [])  # bought_today: no second order
+
+    def test_waits_when_price_above_entry(self):
+        o = FakeOrders()
+        run_check(S, OPEN, plan(picks=[PICK]), [], state_with(), FakeBroker({"ABC": 50.5}), o)
+        self.assertEqual(o.calls, [])
+
+    def test_red_light_paused_and_cap(self):
+        for p, st in [(plan(market_light="red", picks=[PICK]), state_with()),
+                      (plan(picks=[PICK]), state_with(paused=True)),
+                      (plan(picks=[PICK]), state_with(week_start_equity=1100.0))]:  # trips -5%
+            o = FakeOrders()
+            run_check(S, OPEN, p, [], st, FakeBroker({"ABC": 49.0}), o)
+            self.assertEqual([c for c in o.calls if c[0] == "buy"], [])
+        o = FakeOrders(open_orders=[{"symbol": s, "side": "buy", "type": "limit"} for s in ("A", "B")])
+        run_check(S, OPEN, plan(market_light="yellow", picks=[PICK]), [], state_with(),
+                  FakeBroker({"ABC": 49.0}), o)
+        self.assertEqual([c for c in o.calls if c[0] == "buy"], [])  # yellow cap 2 already used
+
+    def test_trend_sleeve(self):
+        o = FakeOrders()
+        b = FakeBroker({"SPY": 500.0}, closes={"SPY": [480.0] * 50})
+        run_check(S, OPEN, plan(trend_sleeve={"hold_spy": True}), [], state_with(), b, o)
+        self.assertEqual(o.calls, [("buy", "SPY", 0.6, 501.0)])
+
+    def test_breaker_reset(self):
+        st = state_with(paused=True, pause_reason="x")
+        ev = run_check({**S, "breaker_reset": 1}, OPEN, plan(), [], st, FakeBroker(), FakeOrders())
+        self.assertFalse(st["paused"])
+        self.assertEqual(ev[0]["type"], "resume")
+
+    def test_live_buy_is_alert_only(self):
+        ev = run_check(LIVE, OPEN, plan(picks=[PICK]), [], state_with(), FakeBroker({"ABC": 49.0}), None)
+        self.assertEqual(ev[0]["type"], "alert")
+        self.assertIn("Alpaca app", ev[0]["text"])
+
+
+class LossStreakTest(unittest.TestCase):
+    def test_broker_stop_fired_between_checks_counts_as_loss(self):
+        # last price seen (49.9) was above the stop and above the loss line (49.75), so the old
+        # code counted it as a win; the broker stop filled at 47.5, which is a loss
+        st = state_with(positions={"ABC": meta()}, last_prices={"ABC": 49.9})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({}, []), FakeOrders())
+        self.assertEqual(st["loss_streak"], 1)
+
+    def test_earnings_sale_records_price_sold_at(self):
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(sell_earnings=["ABC"]), [], st,
+                  FakeBroker({"ABC": 49.8}, [holding()]), FakeOrders())
+        run_check(S, OPEN, plan(), [], st, FakeBroker({}, []), FakeOrders())
+        self.assertEqual(st["loss_streak"], 0)  # 49.8 is not below 50 * 0.995
+
+
+class PartialFillTest(unittest.TestCase):
+    def test_stop_order_with_smaller_qty_is_replaced(self):
+        o = FakeOrders(open_orders=[{"symbol": "ABC", "side": "sell", "type": "stop",
+                                     "stop_price": "47.50", "qty": "2"}])
+        run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}),
+                  FakeBroker({"ABC": 49.0}, [holding()]), o)
+        self.assertIn(("cancel", "ABC"), o.calls)
+        self.assertEqual([c for c in o.calls if c[0] == "stop"], [])
+
+    def test_entry_follows_broker_average_price(self):
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 49.0}, [holding(entry="48")]), FakeOrders())
+        self.assertEqual(st["positions"]["ABC"]["entry"], 48.0)
+
+
+NEXT_DAY = {"is_open": True, "timestamp": "2026-11-10T10:00:00-05:00", "next_close": "2026-11-10T16:00:00-05:00"}
+
+
+class RaisingSell(FakeOrders):
+    def sell_market(self, s, q):
+        if s == "ABC":
+            raise RuntimeError("https://secret.example/url")
+        super().sell_market(s, q)
+
+
+class ReviewFixesTest(unittest.TestCase):
+    def test_buy_filled_after_close_keeps_its_stop_next_day(self):
+        st = state_with()
+        run_check(S, OPEN, plan(picks=[PICK]), [], st, FakeBroker({"ABC": 49.0}), FakeOrders())
+        run_check(S, NEXT_DAY, None, ["no plan"], st, FakeBroker({"ABC": 49.0}, [holding()]), FakeOrders())
+        self.assertEqual(st["positions"]["ABC"]["stop"], 47.5)
+
+    def test_pending_dropped_when_buy_neither_held_nor_open(self):
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0, "since": "2026-11-09"}})
+        run_check(S, NEXT_DAY, None, [], st, FakeBroker(), FakeOrders())
+        self.assertEqual(st["pending"], {})
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0, "since": "2026-11-09"}})
+        o = FakeOrders(open_orders=[{"symbol": "ABC", "side": "buy", "type": "limit"}])
+        run_check(S, NEXT_DAY, None, [], st, FakeBroker(), o)
+        self.assertIn("ABC", st["pending"])
+
+    def test_live_pending_expires_after_three_days(self):
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0, "since": "2026-11-06"}})
+        run_check(LIVE, NEXT_DAY, None, [], st, FakeBroker(), None)
+        self.assertEqual(st["pending"], {})
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0, "since": "2026-11-09"}})
+        run_check(LIVE, NEXT_DAY, None, [], st, FakeBroker(), None)
+        self.assertIn("ABC", st["pending"])
+
+    def test_position_without_stop_warns_every_check(self):
+        st = state_with(positions={"ABC": meta(stop=None)})
+        for _ in range(2):
+            ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 49.0}, [holding()]), FakeOrders())
+            self.assertTrue(any(e["type"] == "problem" and e["symbol"] == "ABC" for e in ev))
+
+    def test_no_buy_when_price_already_below_stop(self):
+        o = FakeOrders()
+        run_check(S, OPEN, plan(picks=[PICK]), [], state_with(), FakeBroker({"ABC": 46.0}), o)
+        self.assertEqual(o.calls, [])
+
+    def test_bad_price_skips_position_and_warns(self):
+        o, st = FakeOrders(), state_with(positions={"ABC": meta()})
+        ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 0}, [holding()]), o)
+        self.assertEqual([c for c in o.calls if c[0] == "sell"], [])
+        self.assertTrue(any(e["type"] == "problem" and e["symbol"] == "ABC" for e in ev))
+
+    def test_failed_sell_does_not_stop_other_sells(self):
+        o = RaisingSell()
+        st = state_with(positions={"ABC": meta(), "XYZ": meta()})
+        b = FakeBroker({"ABC": 47.0, "XYZ": 47.0}, [holding(), holding("XYZ")])
+        ev = run_check(S, OPEN, plan(), [], st, b, o)
+        self.assertIn(("sell", "XYZ", 4.0), o.calls)
+        failed = [e for e in ev if e["type"] == "failed"]
+        self.assertEqual([e["symbol"] for e in failed], ["ABC"])
+        self.assertNotIn("secret", failed[0]["text"])
+        self.assertNotIn("exit_price", st["positions"]["ABC"])
+
+    def test_events_collected_in_caller_list_when_check_raises(self):
+        class Boom(FakeBroker):
+            def latest_price(self, sym):
+                if sym == "DEF":
+                    raise RuntimeError("boom")
+                return 49.0
+        events = []
+        pk2 = {**PICK, "symbol": "DEF"}
+        with self.assertRaises(RuntimeError):
+            run_check(S, OPEN, plan(picks=[PICK, pk2]), [], state_with(), Boom(), FakeOrders(), events)
+        self.assertEqual([e["type"] for e in events], ["buy"])
+
+    def test_stale_exit_price_cleared(self):
+        st = state_with(positions={"ABC": meta(exit_price=40.0)})
+        run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 49.0}, [holding()]), FakeOrders())
+        self.assertNotIn("exit_price", st["positions"]["ABC"])
+
+    def test_filled_event(self):
+        st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0}})
+        ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 50.0}, [holding()]), FakeOrders())
+        self.assertTrue(any(e["type"] == "filled" and "filled 4 at $50.00" in e["text"] for e in ev))
+
+    def test_stopped_out_stock_not_rebought_same_day(self):
+        pick = {**PICK, "stop": 44.0}
+        st = state_with(positions={"ABC": meta()})
+        run_check(S, OPEN, plan(picks=[pick]), [], st, FakeBroker({"ABC": 47.0}, [holding()]), FakeOrders())
+        o = FakeOrders()
+        run_check(S, OPEN, plan(picks=[pick]), [], st, FakeBroker({"ABC": 47.0}), o)
+        self.assertEqual([c for c in o.calls if c[0] == "buy"], [])
+
+
+class MainCliTest(unittest.TestCase):
+    def test_state_saved_when_run_check_raises(self):
+        import json
+        import os
+        import pathlib
+        import tempfile
+        from unittest import mock
+
+        from robot import main
+
+        class FB:
+            def __init__(self, *a): pass
+            def clock(self): return OPEN
+            def account(self): return {"equity": "1000", "cash": "1000"}
+            def positions(self): return [holding()]
+            def latest_price(self, s): raise RuntimeError("boom")
+            def daily_closes(self, s, n, before): return []
+
+        class FakePO:
+            def __init__(self, *a): pass
+            def open_orders(self): return []
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        nb = pathlib.Path(tempfile.mkdtemp())
+        (nb / "settings.yaml").write_text((root / "notebook" / "settings.yaml").read_text(encoding="utf-8"),
+                                          encoding="utf-8")
+        (nb / "state.json").write_text(json.dumps({"date": "2026-11-08", "week": "2026-W46",
+                                                   "week_start_equity": 1000.0}), encoding="utf-8")
+        env = {"APCA_API_KEY_ID": "x", "APCA_API_SECRET_KEY": "y"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(main, "Broker", FB), \
+                mock.patch.object(main.telegram, "send", lambda *a: True), \
+                mock.patch("robot.paper_orders.PaperOrders", FakePO):
+            with self.assertRaises(RuntimeError):
+                main.main(["--notebook", str(nb)])
+        saved = json.loads((nb / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["date"], "2026-11-09")
+
+    def test_events_written_even_when_run_check_raises(self):
+        import json
+        import os
+        import pathlib
+        import tempfile
+        from unittest import mock
+
+        from robot import main
+
+        class FB:
+            def __init__(self, *a): pass
+            def clock(self): return OPEN
+            def account(self): return {"equity": "1000", "cash": "1000"}
+            def positions(self): return []
+            def daily_closes(self, s, n, before): return []
+            def latest_price(self, s):
+                if s == "DEF":
+                    raise RuntimeError("boom")
+                return 49.0
+
+        class FakePO:
+            def __init__(self, *a): pass
+            def open_orders(self): return []
+            def buy_limit(self, *a): pass
+            def cancel_for(self, s): pass
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        nb = pathlib.Path(tempfile.mkdtemp())
+        (nb / "plan").mkdir()
+        (nb / "settings.yaml").write_text((root / "notebook" / "settings.yaml").read_text(encoding="utf-8"),
+                                          encoding="utf-8")
+        (nb / "plan" / "2026-11-09.json").write_text(json.dumps(
+            plan(picks=[PICK, {**PICK, "symbol": "DEF"}])), encoding="utf-8")
+        env = {"APCA_API_KEY_ID": "x", "APCA_API_SECRET_KEY": "y"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(main, "Broker", FB), \
+                mock.patch.object(main.telegram, "send", lambda *a: True), \
+                mock.patch("robot.paper_orders.PaperOrders", FakePO):
+            with self.assertRaises(RuntimeError):
+                main.main(["--notebook", str(nb)])
+        lines = (nb / "trades.jsonl").read_text(encoding="utf-8").splitlines()
+        self.assertEqual([json.loads(l)["type"] for l in lines], ["buy"])
+
+
+if __name__ == "__main__":
+    unittest.main()

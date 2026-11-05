@@ -6,8 +6,12 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
 ## Hard rules
 - Never place, change or cancel orders. Never call any URL containing `/v2/orders`. The Robot does that.
 - Never edit `notebook/settings.yaml`, `notebook/state.json` or `notebook/trades.jsonl`.
-- Write only `notebook/plan/<today>.json` and Mission Control. Never write keys or tokens anywhere.
+- Write only `notebook/plan/<today>.json`, `notebook/diary/*.md`, and Mission Control (`mission-control.html` is never committed; `notebook/MISSION_CONTROL.md` only as the fallback). Never write keys or tokens anywhere.
 - Free FMP plan: at most ~200 FMP calls per day across all runs. Count your FMP-using script runs.
+- `<today>` always means today's date in America/New_York.
+- If the US stock market is closed today (weekend or holiday — check Alpaca's clock/calendar), send nothing, commit nothing, and stop.
+- Never paste URLs, raw error output or API responses into any file or message — keys and tokens live inside URLs.
+- Stage only the files you wrote, by path (never `git add -A` or `git add .`). Push with `git pull --rebase` then `git push`; if that fails, retry once. Only send a "ready" Telegram message after the push succeeded; if it didn't, send "⚠️ Plan not saved: push failed" instead.
 
 ## Steps
 1. `git pull`. Read `notebook/settings.yaml`, `notebook/state.json`, the last 50 lines of
@@ -30,11 +34,11 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
 ```json
 {"date": "YYYY-MM-DD", "version": 1, "market_light": "green", "light_falling": false,
  "trend_sleeve": {"hold_spy": true},
- "picks": [{"symbol": "AAPL", "entry_max": 231.50, "stop": 224.00, "target": 246.00, "reason": "..."}],
+ "picks": [{"symbol": "AAPL", "entry_max": 231.50, "stop": 224.00, "target": 246.50, "reason": "..."}],
  "cancel": [], "sell_earnings": [], "stops": {}, "fmp_calls": 0}
 ```
 
-7. Run `python -m robot.plan notebook/plan/<today>.json <today>`. It must print `OK`. Fix and repeat until it does.
+7. Run `python -m robot.plan notebook/plan/<today>.json <today>`. It must print `OK`. Fix and re-run at most 3 times. If it still fails, do not commit a plan: send '⚠️ No plan today: <first problem line>' on Telegram and stop (the Robot then buys nothing and only manages exits).
 8. Commit `plan: <today>` and push to `main` (on a conflict: `git pull --rebase`, then push).
 9. Heartbeat: if it's a weekday during market hours and `last_check` in `state.json` is over 1 hour
    old, say so in the Telegram message: "⚠️ Robot hasn't checked in since <time>".

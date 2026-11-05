@@ -20,14 +20,16 @@
 
 ## Current Project Status
 
-- **Current Phase:** Spec approved; implementation plan written: `docs/superpowers/plans/2026-11-05-trading-agent.md` (13 tasks). Its code was extracted and run: 39/39 tests pass.
-- **Current Goal:** Build it (Tasks 0–12), then a 1-week **paper-money** test.
-- **Current Priority:** Ethan picks how to run the plan (subagents or in-session), then start with Task 0 (routine spike, needs Ethan) alongside Tasks 1–9 (no accounts needed).
+- **Current Phase:** Built (plan Tasks 1–10, merged to `main` 2026-11-05). 58 tests pass. Not yet run against real Alpaca/Telegram — needs Ethan's accounts.
+- **Current Goal:** Ethan's setup (plan Task 0 spike + Task 11), first real Actions run, then the 1-week **paper-money** test.
+- **Current Priority:** Plan Task 0 — Ethan makes one Claude routine to test pushing to `main` and republishing the Mission Control Artifact.
 - **Current Blockers:**
-  - Unproven: can a Claude cloud routine push to `main` and republish the Mission Control Artifact? (plan Task 0; fallback `notebook/MISSION_CONTROL.md`).
-  - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot (plan Task 11).
+  - Unproven: can a Claude cloud routine push to `main` and republish an Artifact? (plan Task 0; fallback `notebook/MISSION_CONTROL.md`).
+  - Ethan still has to create (himself, one step per message): Alpaca paper account + keys, FMP **free** key, Telegram bot, GitHub Actions secrets, cloud environment (plan Task 11).
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
-- **Recommended Next Task:** Execute the plan, Task 1 onward.
+- **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; dashboard says "Paper money test" always.
+- **Known, parked:** trend-sleeve buy crashes the check if the broker returns price 0 (fails safe, ⚠️ alert); a repeating ❌ "failed" order event is sent every check.
+- **Recommended Next Task:** plan Task 0, then Task 11, one step per message.
 
 *Last updated: 2026-11-05*
 
@@ -51,7 +53,7 @@ A swing-trading assistant for Ethan (small account, under $1,000 real money late
 - Skip stocks with earnings in the next few days.
 - No personalised investment advice — rules are Ethan's choices; Claude explains options.
 
-## Architecture (agreed design, not built yet)
+## Architecture (built 2026-11-05)
 
 - **Claude (brain):** Claude Code cloud scheduled task, 3 runs/weekday — 9:00 plan, 12:30 adjust, 16:30 diary/report (ET); weekly review on weekends. Uses Ethan's **Pro** allowance (runs count against it; min interval 1 hour).
 - **Robot:** Python on GitHub Actions cron, every 15 min while market is open. Reads the plan, checks prices, runs safety checks, places paper orders (paper week) / sends alerts (live), checks stops for fractional positions. Uses no Claude allowance.
@@ -83,7 +85,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 - [x] Spec approved → implementation plan (2026-11-05)
 - [x] Private GitHub repo (2026-11-05)
 - [ ] Ethan's accounts (Alpaca paper, FMP free, Telegram)
-- [ ] Build Robot + Claude routines + Mission Control
+- [x] Build Robot + Claude routines + Mission Control (2026-11-05)
 - [ ] 1-week paper test → decide on FMP paid and real money
 
 ## Important Decisions
@@ -97,6 +99,14 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-05 | Swing + small trend sleeve; Careful risk set; Telegram; paper week with Robot trading fake money | Ethan's choices | — |
 
 ## Implementation Notes
+
+- Run tests: `python -m unittest discover -s tests -v` (set `PYTHONIOENCODING=utf-8` on Windows).
+- Dry run locally (needs paper keys in env): `PYTHONIOENCODING=utf-8 python -m robot.main --dry-run` — no orders, no files, no Telegram.
+- Plan self-check: `python -m robot.plan notebook/plan/<date>.json <date>`. Mission Control: `python -m robot.dashboard [--markdown]`.
+- `robot/paper_orders.py` is the only order code; `tests/test_live_guard.py` fails if live mode can reach it (proven by inserting an import).
+- `notebook/settings.yaml` can only tighten the Careful limits (ceilings in `robot/settings.py`). Safety brake reset: raise `breaker_reset` by 1.
+- Workflow `robot.yml` commits `notebook/state.json` + `trades.jsonl` even after a failed check, so a crash can't make the next run repeat a trade.
+- Subagents can't write files whose name contains "report" (a global write hook) — the controller writes those.
 
 - The source guide (mindstudio.ai/blog/build-ai-trading-agent-claude-code-alpaca) mixes 5%/10%/15% position caps and never calls its `validate_order` — don't copy it.
 - `trader-memory-core`'s CLI wrapper expects the upstream repo layout; call its scripts directly (e.g. `thesis_store.py --state-dir <dir> list`).

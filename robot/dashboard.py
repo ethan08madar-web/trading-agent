@@ -28,27 +28,42 @@ def load(nb):
     diary_file = _latest(os.path.join(nb, "diary", "*.md"))
     trades = []
     try:
-        with open(os.path.join(nb, "trades.jsonl"), encoding="utf-8") as f:
-            trades = [json.loads(line) for line in f if line.strip()][-20:]
-    except (OSError, ValueError):
+        # One torn line (a crashed append) must not blank the whole feed.
+        with open(os.path.join(nb, "trades.jsonl"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    t = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(t, dict):
+                    trades.append(t)
+    except OSError:
         pass
+    trades = trades[-20:]
     diary = "No diary yet."
     if diary_file:
         with open(diary_file, encoding="utf-8") as f:
             diary = f.read()
-    return {"state": _json(os.path.join(nb, "state.json"), {}),
-            "plan": _json(plan_file, {}) if plan_file else {},
+    state = _json(os.path.join(nb, "state.json"), {})
+    plan = _json(plan_file, {}) if plan_file else {}
+    # Hand-edited or half-written JSON can be the wrong shape; render with nothing rather than crash.
+    return {"state": state if isinstance(state, dict) else {},
+            "plan": plan if isinstance(plan, dict) else {},
             "plan_date": os.path.basename(plan_file)[:-5] if plan_file else "none",
             "trades": trades[::-1], "diary": diary}
 
 
 def _rows(d):
     st, plan = d["state"], d["plan"]
+    raw_picks = plan.get("picks")
     picks = [(k.get("symbol"), k.get("entry_max"), k.get("stop"), k.get("target"), k.get("reason", ""))
-             for k in plan.get("picks", [])]
-    prices = st.get("last_prices", {})
+             for k in (raw_picks if isinstance(raw_picks, list) else []) if isinstance(k, dict)]
+    prices = st.get("last_prices")
+    prices = prices if isinstance(prices, dict) else {}
+    positions = st.get("positions")
+    positions = positions if isinstance(positions, dict) else {}
     pos = [(s, m.get("entry"), m.get("stop") or "—", "sleeve" if m.get("sleeve") else (m.get("target") or "—"),
-            prices.get(s, "—")) for s, m in st.get("positions", {}).items()]
+            prices.get(s, "—")) for s, m in positions.items() if isinstance(m, dict)]
     safety = [("Buying", "PAUSED — " + st.get("pause_reason", "") if st.get("paused") else "allowed"),
               ("Losses in a row", st.get("loss_streak", 0)),
               ("Week start equity", st.get("week_start_equity", "—")),
@@ -80,7 +95,7 @@ body{{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;ma
 h1{{font-size:22px}} h2{{font-size:16px;margin-top:28px}} .muted{{color:var(--muted)}}
 table{{border-collapse:collapse;width:100%;display:block;overflow-x:auto}}
 td,th{{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left}}
-pre{{white-space:pre-wrap}} ul{{padding-left:18px}}
+pre{{white-space:pre-wrap;overflow-wrap:anywhere}} ul{{padding-left:18px;overflow-wrap:anywhere}}
 </style></head><body>
 <h1>Mission Control {light}</h1>
 <p class="muted">Paper money test. Plan: {e(d["plan_date"])}. Updated at each Claude run, not live.</p>

@@ -1,0 +1,1 @@
+Skills in .claude/skills/ come from https://github.com/tradermonty/claude-trading-skills (MIT), commit d8e71ce, downloaded 2026-11-05.

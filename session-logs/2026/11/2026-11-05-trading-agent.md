@@ -70,3 +70,77 @@ See CLAUDE.md Important Decisions table. Key: Way 2 team-of-two (rejected all-Cl
 - He asked several times for Claude to press the real button (directly or via an agent) — the answer is always no; don't reopen it.
 - Pro plan: keep Claude runs to ~3/day so his other projects aren't blocked.
 - The originating session's brief said "paper first, never real money"; Ethan later said he wants real money after the paper week — live mode = alerts only, he trades.
+
+---
+
+# Session 2 — 2026-11-05 (afternoon/evening) — design → build → first live connection
+
+## Goals
+Pick up from session 1: finish design Parts 3–4, write spec + plan, build, connect Ethan's accounts.
+
+## Completed
+- Design Parts 3 (Mission Control, Telegram, failure handling) and 4 (setup, test week, going live) approved.
+- Spec `docs/superpowers/specs/2026-11-05-trading-agent-design.md`; plan `docs/superpowers/plans/2026-11-05-trading-agent.md` (13 tasks). Plan code was extracted and run before handing it out (39 tests at that point).
+- Built Tasks 1–10 with subagent-driven development (haiku implementers, sonnet task reviewers, opus final review), batched as 1–4, 5–6, 7–9, 10. Merged `feat/robot` → `main`.
+- Added a guard so `robot.yml` skips quietly until Alpaca keys exist.
+- Task 0 spike: Claude created a one-time cloud routine with `RemoteTrigger`; it pushed to `main` and republished an Artifact twice at the same URL (https://claude.ai/artifact/ESeSSp8YhF3xtomyhf89Wu).
+- Task 11 partly: Alpaca paper account + 2 keys, Telegram bot + chat id → 4 GitHub Actions secrets. Manual Robot run #1 succeeded.
+
+## Files Changed
+| File | Change |
+|---|---|
+| `docs/superpowers/specs/…design.md`, `docs/superpowers/plans/…trading-agent.md` | Added |
+| `robot/*.py` (settings, safety, plan, broker, paper_orders, telegram, main, dashboard) | Added |
+| `tests/*.py` (58 tests) | Added |
+| `.github/workflows/robot.yml`, `tests.yml` | Added |
+| `routines/plan.md`, `adjust.md`, `report.md`, `weekly.md` | Added |
+| `notebook/settings.yaml`, `state.json` (`{}`), `trades.jsonl`, `plan/`, `diary/` | Added |
+| `.gitignore` | `mission-control.html` |
+| `CLAUDE.md`, `CHANGELOG.md` | Status, decisions, implementation notes |
+
+## How It Was Verified
+- 58/58 unit tests (`python -m unittest discover -s tests`), run after the merge to `main`.
+- Verify-the-verifier: inserting `import robot.paper_orders` into main.py turns `test_live_guard` red, and restoring the file turns it green. The same check was done for the safety threshold and the plan-stop rule.
+- Mission Control rendered in the browser pane: 375px wide with no sideways scroll (scrollWidth 375), and dark mode tokens apply.
+- Skip-without-keys guard: the shell snippet was run with an empty and a set `APCA_API_KEY_ID`, and the YAML parses.
+- Spike: `git log origin/main` shows commit 48e43be by the routine, and the run log shows Artifact v1→v2 at the same URL.
+- Secrets: the GitHub secrets list was read by Claude in Chrome after each add (4 listed).
+- Live run: Actions "robot #1" (workflow_dispatch, dry run off) succeeded in 16s. Commit 1497dc1 has a `trades.jsonl` line "⚠️ No valid plan today", and `state.json` has week_start_equity 100000. Ethan confirmed the Telegram message arrived.
+- **Not verified:** the `tests` workflow result on GitHub (not checked); a scheduled (cron) robot run (none had fired yet when checked); a later routine session updating the same Artifact; any paper order placement against real Alpaca.
+
+## Decisions Made
+- Batched subagent dispatches (plan code was already proven by running it).
+- The loss-streak brake uses `min(last price, stop)` when a broker stop fires between checks, so stop-outs can't count as wins.
+- State is saved even when a check crashes (try/finally plus atomic write), and the workflow commits it on `always()`, so a crash can't repeat a trade.
+- `max_stop_distance` ceiling is 0.15, matching spec §4. The plan had 0.25.
+- `pending` survives day rollover. A held position with no stop warns every check.
+- Routine prompts: the diary is allowed, SPY is dropped when the light isn't green, validation gives up after 3 tries, and on market-closed days plan/adjust/report stop but the weekly review still runs.
+- Mission Control is a real Artifact; the markdown fallback is kept.
+
+## Bugs Fixed (found by reviews before any money moved)
+- A late fill had no stop: the day rollover wiped `pending`. Fix: keep pending across days, drop it only when the symbol is neither held nor has an open buy.
+- The Robot bought a pick already below its stop. Fix: buy only when `stop < price <= entry_max`.
+- One failed order call aborted the whole check. Fix: each call is wrapped and emits a ❌ "failed" event.
+- Events were lost on a crash. Fix: `main()` owns the events list.
+- The first-day Save step failed (no `state.json`). Fix: committed `{}`.
+- A broker stop didn't cover a partial fill. Fix: replace the stop when its qty differs from the held qty.
+- The Robot would have run every 15 min without keys and emailed failures. Fix: skip guard.
+
+## Issues Remaining
+- **The paper account holds $100,000 (default).** Reset to ~$1,000 before the test week, or sizing is 100× too big.
+- No FMP key, no cloud environment network/secrets, no routines → no daily plan yet.
+- Before live: exit price from FILL activities, cash vs open orders, dashboard wording.
+- Parked: sleeve price-0 crash; repeating ❌ events.
+- Commit trailers on 2 commits say Haiku 5.5 (cosmetic, left alone).
+
+## Next Steps
+1. Ethan resets the Alpaca paper account to ~$1,000. If new keys are issued, update both GitHub secrets.
+2. FMP free key.
+3. Ethan sets the claude.ai cloud environment: Custom network (paper-api/api/data.alpaca.markets, financialmodelingprep.com, api.telegram.org, query1/query2.finance.yahoo.com) and secrets.
+4. Claude creates the 4 routines with `RemoteTrigger` (Plan 09:00 ET, Adjust 12:30, Report 16:30 weekdays; Weekly Saturday).
+5. Trigger Plan once, then watch the next Robot check place a paper order.
+
+## Important Context
+- Ethan clicks "done"-style buttons before doing the step. Verify every step yourself (a fresh Chrome tab, never reloading one he may be typing in). Several "Added" clicks happened while nothing was saved; on the final attempt he did it properly.
+- Ethan pasted the Alpaca Key ID, a screenshot with the Alpaca Secret, and the Telegram token in chat. All were rotated (Alpaca regenerated twice, Telegram `/revoke`). The current values were never shared.
+- Claude in Chrome triggers GitHub sudo mode (GitHub Mobile number prompt) when opening app-installation settings.

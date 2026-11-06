@@ -20,7 +20,10 @@ def parse_ts(s):
 def new_state():
     return {"last_check": None, "date": None, "week": None, "week_start_equity": None,
             "loss_streak": 0, "paused": False, "pause_reason": "", "breaker_reset_seen": 0,
-            "positions": {}, "pending": {}, "bought_today": [], "alerted": {}, "last_prices": {}}
+            "positions": {}, "pending": {}, "bought_today": [], "alerted": {}, "last_prices": {},
+            "equity_history": []}
+
+EQUITY_POINTS = 400  # ~2 weeks of 15-minute checks; feeds the Mission Control chart
 
 
 def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=None):
@@ -237,6 +240,7 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=
             buy(sym, qty, k["entry_max"], f", stop ${k['stop']:.2f}", {"stop": k["stop"], "target": k["target"]})
 
     state["last_check"] = now.isoformat()
+    state["equity_history"] = (state["equity_history"] + [[now.isoformat(timespec="minutes"), round(equity, 2)]])[-EQUITY_POINTS:]
     return events
 
 
@@ -305,8 +309,11 @@ def main(argv=None):
         print(e["text"])
     if args.dry_run:
         return 0
-    for e in events:
-        telegram.send(env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID"), e["text"])
+    if events:  # one card per check, not one text per event
+        hhmm = (state["last_check"] or "")[11:16]
+        footer = "Paper money" if settings["mode"] == "paper" else "Live — you place every trade in the Alpaca app"
+        telegram.send(env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID"),
+                      telegram.card(f"🤖 Robot check · {hhmm} ET", [e["text"] for e in events], footer), True)
     return 0
 
 

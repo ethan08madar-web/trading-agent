@@ -9,5 +9,6 @@ Same hard rules as `routines/plan.md` (read it). Use few FMP calls: this run is 
 5. Held positions: raise `stops` where support moved up (never lower a stop). Update `sell_earnings`
    from `python -m robot.research <held symbols>` (earnings within 2 days; 1 FMP call).
 6. Bump `version`, validate with `python -m robot.plan`, then commit `plan: <today> v<n>` and push.
-7. Heartbeat check as in plan.md step 9. Telegram only if something changed or the heartbeat is stale.
+7. Heartbeat check as in plan.md step 9. Telegram only if something changed or the heartbeat is stale,
+   with `python -m robot.telegram` — title "🔄 Midday update", then one line per change (e.g. "**Cancelled:** CRWD — broke below its stop").
 8. Update Mission Control (plan.md step 11).

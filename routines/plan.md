@@ -49,12 +49,19 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
  "cancel": [], "sell_earnings": [], "stops": {}, "fmp_calls": 0}
 ```
 
-7. Run `python -m robot.plan notebook/plan/<today>.json <today>`. It must print `OK`. Fix and re-run at most 3 times. If it still fails, do not commit a plan: send '⚠️ No plan today: <first problem line>' on Telegram and stop (the Robot then buys nothing and only manages exits).
+7. Run `python -m robot.plan notebook/plan/<today>.json <today>`. It must print `OK`. Fix and re-run at most 3 times. If it still fails, do not commit a plan: send `python -m robot.telegram "⚠️ No plan today" "<first problem line>" "The Robot will only manage exits."` and stop (the Robot then buys nothing and only manages exits).
 8. Commit `plan: <today>` and push to `main` (on a conflict: `git pull --rebase`, then push).
 9. Heartbeat: if it's a weekday during market hours and `last_check` in `state.json` is over 1 hour
    old, say so in the Telegram message: "⚠️ Robot hasn't checked in since <time>".
-10. Telegram (bot token and chat id are in the environment): send
-    "📋 Plan ready: <light> — <N> picks: AAPL, …". One message.
+10. Telegram — one message, always with `python -m robot.telegram` (it formats a card: bold title,
+    one short fact per line; `**x**` is bold, `""` is a blank line). Plain words, no jargon. Example:
+    ```
+    python -m robot.telegram "📋 Plan ready — 🟢 Green light" \
+      "**2 picks:** NVDA, CRWD" "NVDA: buy up to \$150, stop \$141" "CRWD: buy up to \$402, stop \$381" "" \
+      "**Why:** most stocks rising, SPY above its 50-day average" "" "Mission Control: <Artifact URL>"
+    ```
+    Red light: title "📋 Plan ready — 🔴 Red light", then "**No new buys today**" and one "**Why:**" line.
+    Put any ⚠️ heartbeat line (step 9) right under the title.
 11. Mission Control: `python -m robot.dashboard > mission-control.html` and publish it to the
     Mission Control Artifact (same URL every time; see CLAUDE.md). If publishing fails, commit
     `python -m robot.dashboard --markdown > notebook/MISSION_CONTROL.md` instead.

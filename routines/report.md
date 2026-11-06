@@ -12,5 +12,6 @@ Same hard rules as `routines/plan.md`. No FMP calls needed.
    - FMP calls used today (estimate).
    - Say plainly: one day of results says nothing about whether the strategy works.
 3. Commit `diary: <today>` and push.
-4. Telegram "📓 Daily report: <one-line summary> — P&L today $X (paper)".
+4. Telegram with `python -m robot.telegram` (see plan.md step 10), e.g.:
+   `"📓 Daily report — Fri Nov 6" "**Account:** \$1,012.40 (▲ +\$12.40 today)" "**Trades:** bought NVDA; AMD stop hit" "**Open:** 2 positions" "" "<one plain-English sentence on the day>" "" "Mission Control: <Artifact URL>"`
 5. Update Mission Control (plan.md step 11).

@@ -11,6 +11,10 @@ Notable changes to **this project**, newest first. One dated block per working s
 ### Changed
 - Plan run checks candidates with new `robot/research.py` (earnings for any company size, bad price data, price levels with a default entry/stop/target) instead of `earnings-calendar`, `data-quality-checker` and `technical-analyst`. 10 new tests (68 total).
 - `Broker.daily_bars` returns full daily bars; `daily_closes` now uses it.
+- Mission Control redesigned as a broker-style phone page: big account value with week change, a line chart you can scrub (mouse, touch, arrow keys), market-light lamps, plan/positions rows with P&L.
+- The Robot saves `equity_history` (last 400 checks) in `state.json` to feed that chart.
+- Telegram: the Robot sends one bold-titled card per check instead of one text per event; routines send cards with `python -m robot.telegram "Title" "line" ...`. 4 new tests (74 total).
+- Paper account switched to $1,000; cloud environment `trading-agent` and the 4 routines created.
 
 ## 2026-11-05
 

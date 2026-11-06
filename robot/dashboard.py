@@ -7,6 +7,8 @@ import json
 import os
 import sys
 
+from robot.settings import load_settings
+
 LIGHTS = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
 
 
@@ -46,11 +48,15 @@ def load(nb):
             diary = f.read()
     state = _json(os.path.join(nb, "state.json"), {})
     plan = _json(plan_file, {}) if plan_file else {}
+    try:
+        settings = load_settings(os.path.join(nb, "settings.yaml"))
+    except Exception:  # the page must render even if settings are missing or rejected
+        settings = {}
     # Hand-edited or half-written JSON can be the wrong shape; render with nothing rather than crash.
     return {"state": state if isinstance(state, dict) else {},
             "plan": plan if isinstance(plan, dict) else {},
             "plan_date": os.path.basename(plan_file)[:-5] if plan_file else "none",
-            "trades": trades[::-1], "diary": diary}
+            "trades": trades[::-1], "diary": diary, "settings": settings}
 
 
 def _rows(d):
@@ -85,7 +91,7 @@ def _money(x):
 
 
 def _change(now, base):
-    """('up'|'down'|'flat', '+$12.00 (+1.20%)') — the sign and arrow carry direction, not just color."""
+    """('up'|'down'|'flat', '▲ +$12.00 (+1.20%)') — the sign and arrow carry direction, not just color."""
     if now is None or not base:
         return "flat", "—"
     diff = now - base
@@ -94,15 +100,20 @@ def _change(now, base):
     return kind, f"{arrow} {'+' if diff >= 0 else '−'}${abs(diff):,.2f} ({diff / base:+.2%})"
 
 
+def _syms(x):
+    return [str(s) for s in x] if isinstance(x, list) else []
+
+
 LIGHT_TEXT = {"green": "Green — up to 4 positions", "yellow": "Yellow — up to 2 positions",
               "red": "Red — no new buys today"}
+SCHEDULE = "Updates after each Claude run: 9:00 plan · 12:30 adjust · 16:30 report (New York time, weekdays)"
 
 
 def render(nb):
     d = load(nb)
     e = lambda x: html.escape(str(x))
-    st, plan = d["state"], d["plan"]
-    picks, pos, safety = _rows(d)
+    st, plan, cfg = d["state"], d["plan"], d["settings"]
+    picks, pos, _ = _rows(d)
 
     raw = st.get("equity_history")
     hist = [[str(p[0]), _num(p[1])] for p in (raw if isinstance(raw, list) else [])
@@ -110,6 +121,8 @@ def render(nb):
     equity = hist[-1][1] if hist else None
     week_base = _num(st.get("week_start_equity"))
     kind, change = _change(equity, week_base)
+    today = [v for t, v in hist if hist and t[:10] == hist[-1][0][:10]]
+    t_kind, t_change = _change(equity, today[0] if today else None)
 
     light_key = plan.get("market_light")
     light = LIGHTS.get(light_key, "⚪")
@@ -121,52 +134,104 @@ def render(nb):
     def rows(items, empty):
         return "".join(items) or f'<p class="empty">{empty}</p>'
 
-    pick_rows = rows([
-        f'<div class="row"><div><b class="sym">{e(s)}</b><span class="sub">{e(why)}</span></div>'
-        f'<div class="r"><span class="fig">Buy ≤ {_money(em)}</span>'
-        f'<span class="sub">Stop {_money(sp)} · Target {_money(tg)}</span></div></div>'
-        for s, em, sp, tg, why in picks], "No picks today. The Robot only watches what you already hold.")
+    def pick_row(s, em, sp, tg, why):
+        en, so, ta = _num(em), _num(sp), _num(tg)
+        facts = []
+        if en and so is not None and en > so:
+            facts.append(f"risks {(en - so) / en:.1%} to the stop")
+            if ta is not None:
+                facts.append(f"aims {(ta - en) / en:+.1%}")
+                facts.append(f"reward {(ta - en) / (en - so):.1f}× the risk")
+        return (f'<div class="row"><div><b class="sym">{e(s)}</b><span class="sub">{e(why)}</span>'
+                f'<span class="sub dim">{e(" · ".join(facts))}</span></div>'
+                f'<div class="r"><span class="fig">Buy ≤ {_money(em)}</span>'
+                f'<span class="sub">Stop {_money(sp)} · Target {_money(tg)}</span></div></div>')
+
+    pick_rows = rows([pick_row(*p) for p in picks], "No picks today. The Robot only watches what you already hold.")
+
+    raw_pos = st.get("positions") if isinstance(st.get("positions"), dict) else {}
 
     def pos_row(s, entry, stop, target, last):
         k, pct = "flat", "—"
-        en, la = _num(entry), _num(last)
+        en, la, so, ta = _num(entry), _num(last), _num(stop), _num(target)
         if en and la is not None:
             k = "up" if la > en else "down" if la < en else "flat"
             pct = f"{'▲' if k == 'up' else '▼' if k == 'down' else '•'} {(la - en) / en:+.2%}"
-        tgt = target if target == "sleeve" else _money(target) if _num(target) is not None else "—"
-        return (f'<div class="row"><div><b class="sym">{e(s)}</b>'
-                f'<span class="sub">Entry {_money(entry)} · Stop {_money(stop) if _num(stop) is not None else "—"}'
-                f' · Target {e(tgt)}</span></div>'
-                f'<div class="r"><span class="fig">{_money(last)}</span><span class="pill {k}">{pct}</span></div></div>')
+        meta = raw_pos.get(s) if isinstance(raw_pos.get(s), dict) else {}
+        tags = "".join(f'<span class="tag">{t}</span>' for t, on in
+                       (("Trend sleeve", meta.get("sleeve")), ("Half sold", meta.get("half_sold"))) if on)
+        bar, gap = "", []
+        if la is not None and so is not None and ta is not None and ta > so:
+            at = min(100, max(0, (la - so) / (ta - so) * 100))
+            bar = (f'<div class="range" role="img" aria-label="Price {at:.0f}% of the way from stop to target">'
+                   f'<span class="fill {k}" style="width:{at:.0f}%"></span><span class="mark" style="left:{at:.0f}%"></span></div>'
+                   f'<div class="ends"><span>Stop {_money(so)}</span><span>Target {_money(ta)}</span></div>')
+        if la and so is not None:
+            gap.append(f"{(la - so) / la:.1%} above stop")
+        if la and ta is not None:
+            gap.append(f"{(ta - la) / la:+.1%} to target")
+        return (f'<div class="row col"><div class="line"><div><b class="sym">{e(s)}</b>{tags}'
+                f'<span class="sub">Bought at {_money(entry)}{" · " + e(" · ".join(gap)) if gap else ""}</span></div>'
+                f'<div class="r"><span class="fig">{_money(last)}</span><span class="pill {k}">{pct}</span></div></div>{bar}</div>')
 
     pos_rows = rows([pos_row(*p) for p in pos], "No open positions.")
-    safety_rows = "".join(f'<div class="kv"><span>{e(k)}</span><b>{e(v)}</b></div>' for k, v in safety)
+
+    pending = st.get("pending") if isinstance(st.get("pending"), dict) else {}
+    waiting = "".join(f'<span class="chip">{e(s)}</span>' for s in pending) or '<span class="dim">none</span>'
+    sleeve = plan.get("trend_sleeve") if isinstance(plan.get("trend_sleeve"), dict) else {}
+    plan_facts = [("Plan version", plan.get("version", "—")),
+                  (f"Hold {e(cfg.get('sleeve_symbol', 'SPY'))} (trend sleeve)", "yes" if sleeve.get("hold_spy") else "no"),
+                  ("Cancelled today", ", ".join(_syms(plan.get("cancel"))) or "none"),
+                  ("Selling before earnings", ", ".join(_syms(plan.get("sell_earnings"))) or "none"),
+                  ("FMP data calls", f"{plan.get('fmp_calls', '—')} of 250")]
+    plan_rows = "".join(f'<div class="kv"><span>{k}</span><b>{e(v)}</b></div>' for k, v in plan_facts)
+
+    def meter(label, used, limit, text, brake=True):
+        share = 0 if not limit else min(100, max(0, used / limit * 100))
+        level = "ok" if not brake else "hot" if share >= 80 else "warm" if share >= 50 else "ok"
+        return (f'<div class="meter"><div class="mh"><span>{label}</span><b>{e(text)}</b></div>'
+                f'<div class="track"><span class="{level}" style="width:{share:.0f}%"></span></div></div>')
+
+    streak, streak_max = int(_num(st.get("loss_streak")) or 0), int(_num(cfg.get("loss_streak_limit")) or 3)
+    wk_limit = _num(cfg.get("week_loss_limit")) or 0.05
+    wk_loss = max(0.0, -(equity - week_base) / week_base) if equity is not None and week_base else 0.0
+    n_pos, max_pos = len(pos), int(_num(cfg.get("max_positions")) or 4)
+    brake = (f'<p class="brake on">⏸️ Buying paused — {e(st.get("pause_reason", ""))}</p>' if st.get("paused")
+             else '<p class="brake">▶️ Buying allowed</p>')
+    meters = (meter("Losses in a row", streak, streak_max, f"{streak} of {streak_max}")
+              + meter("Loss this week", wk_loss, wk_limit, f"{wk_loss:.1%} of {wk_limit:.0%}")
+              + meter("Open positions", n_pos, max_pos, f"{n_pos} of {max_pos}", brake=False))
+    rules = (f"Max loss per trade {(_num(cfg.get('risk_per_trade')) or 0.01):.0%} of the account · "
+             f"max {(_num(cfg.get('max_position')) or 0.30):.0%} in one stock · "
+             f"stops at most {(_num(cfg.get('max_stop_distance')) or 0.15):.0%} below entry")
+
     feed = "".join(f'<li><time>{e(str(t.get("time", ""))[5:16].replace("T", " "))}</time>{e(t.get("text", ""))}</li>'
                    for t in d["trades"])
     data = json.dumps({"points": hist, "base": week_base}).replace("<", "\\u003c")
     hero = _money(equity) if equity is not None else "—"
     updated = str(st.get("last_check") or "never")[:16].replace("T", " ")
+    mode = "Live — you place trades" if cfg.get("mode") == "live" else "Paper money"
 
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+    return f"""<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Mission Control</title>
+<meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{{--bg:#f3f5f7;--card:#ffffff;--ink:#0f1418;--muted:#5d6872;--line:#e2e6ea;--up:#0b7a32;--upline:#14a24f;--down:#c3352b;
---red:#d9473c;--yellow:#e0a100;--green:#17a34a;--off:#d5dbe0;--focus:#2563eb}}
-@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#0a0d10;--card:#12171c;--ink:#edf1f4;--muted:#8b97a2;
---line:#202830;--up:#34d27a;--upline:#2fc26e;--down:#ff6d61;--off:#26303a;--focus:#7aa7ff}}}}
-:root[data-theme="dark"]{{--bg:#0a0d10;--card:#12171c;--ink:#edf1f4;--muted:#8b97a2;--line:#202830;--up:#34d27a;--upline:#2fc26e;
---down:#ff6d61;--off:#26303a;--focus:#7aa7ff}}
+:root{{--bg:#0a0d10;--card:#12171c;--card2:#181e24;--ink:#edf1f4;--muted:#8b97a2;--dim:#66727d;--line:#202830;
+--up:#34d27a;--upline:#2fc26e;--down:#ff6d61;--warn:#f0b429;--off:#26303a;--focus:#7aa7ff;
+--red:#e5534b;--yellow:#e0a100;--green:#2fc26e;color-scheme:dark}}
+:root[data-theme="light"]{{--bg:#f3f5f7;--card:#ffffff;--card2:#f7f9fa;--ink:#0f1418;--muted:#5d6872;--dim:#7b858e;
+--line:#e2e6ea;--up:#0b7a32;--upline:#14a24f;--down:#c3352b;--warn:#b7791f;--off:#d5dbe0;--focus:#2563eb;color-scheme:light}}
 *{{box-sizing:border-box}}
 body{{background:var(--bg);color:var(--ink);font:15px/1.45 Geist,system-ui,sans-serif;margin:0}}
 main{{max-width:560px;margin:0 auto;padding:20px 16px 48px}}
-.fig,time,.kv b,.pill{{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}}
+.fig,time,.kv b,.pill,.tile b,.mh b,.ends{{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}}
 .hero,.chg{{font-variant-numeric:tabular-nums}}
 header{{display:flex;justify-content:space-between;align-items:baseline;gap:12px}}
 .eyebrow{{font-size:13px;color:var(--muted);margin:0}} .badge{{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--muted)}}
 .hero{{font-size:46px;font-weight:600;letter-spacing:-.03em;margin:6px 0 2px;line-height:1.1}}
-.chg{{font-size:15px;margin:0}} .chg.up,.pill.up{{color:var(--up)}} .chg.down,.pill.down{{color:var(--down)}} .chg.flat,.pill.flat{{color:var(--muted)}}
+.chg{{font-size:15px;margin:0}} .up{{color:var(--up)}} .down{{color:var(--down)}} .flat{{color:var(--muted)}}
 .chg small{{color:var(--muted);font-family:Geist,sans-serif}}
 .chart{{margin:18px -4px 6px;position:relative;outline:none;border-radius:8px}} .chart:focus-visible{{box-shadow:0 0 0 2px var(--focus)}}
 .chart svg{{display:block;width:100%;height:180px;overflow:visible}}
@@ -175,7 +240,10 @@ header{{display:flex;justify-content:space-between;align-items:baseline;gap:12px
 .chart.up .ln{{stroke:var(--upline)}} .chart.down .ln{{stroke:var(--down)}} .chart.flat .ln{{stroke:var(--muted)}}
 .chart .cross{{stroke:var(--muted);stroke-width:1}}
 .empty-chart{{height:180px;display:grid;place-items:center;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;padding:16px;font-size:14px}}
-.signal{{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:18px}}
+.tiles{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}}
+.tile{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}}
+.tile span{{display:block;font-size:12px;color:var(--muted)}} .tile b{{display:block;font-size:15px;font-weight:500;margin-top:2px;overflow-wrap:anywhere}}
+.signal{{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:14px}}
 .lamps{{display:flex;gap:6px;background:var(--bg);border-radius:999px;padding:5px}}
 .lamp{{width:14px;height:14px;border-radius:50%;background:var(--off)}}
 .lamp.on.red{{background:var(--red);box-shadow:0 0 10px var(--red)}} .lamp.on.yellow{{background:var(--yellow);box-shadow:0 0 10px var(--yellow)}}
@@ -183,30 +251,53 @@ header{{display:flex;justify-content:space-between;align-items:baseline;gap:12px
 .signal b{{display:block;font-weight:600}} .signal span{{color:var(--muted);font-size:13px}}
 h2{{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:30px 0 4px}}
 .row{{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}}
-.row>div{{min-width:0}} .r{{text-align:right;flex-shrink:0}} .sym{{font-size:16px;font-weight:600;display:block}}
-.sub{{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}} .fig{{display:block;font-size:15px}}
+.row.col{{flex-direction:column;gap:8px}} .line{{display:flex;justify-content:space-between;gap:12px}}
+.row>div,.line>div{{min-width:0}} .r{{text-align:right;flex-shrink:0}} .sym{{font-size:16px;font-weight:600}}
+.sub{{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}} .dim{{color:var(--dim)}} .fig{{display:block;font-size:15px}}
 .pill{{display:inline-block;font-size:13px;margin-top:2px}}
+.tag{{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-left:8px;vertical-align:2px}}
+.range{{position:relative;height:6px;border-radius:3px;background:var(--off)}}
+.range .fill{{position:absolute;left:0;top:0;bottom:0;border-radius:3px;opacity:.55}}
+.range .fill.up{{background:var(--upline)}} .range .fill.down{{background:var(--down)}} .range .fill.flat{{background:var(--muted)}}
+.range .mark{{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--card);transform:translate(-50%,-50%)}}
+.ends{{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}}
 .empty{{color:var(--muted);font-size:14px;margin:8px 0}}
 .kv{{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}}
 .kv span{{color:var(--muted)}} .kv b{{font-weight:500;text-align:right;overflow-wrap:anywhere}}
+.chips{{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;padding:9px 0;border-bottom:1px solid var(--line)}}
+.chips>span:first-child{{color:var(--muted);margin-right:auto}}
+.chip{{font:500 13px "Geist Mono",monospace;background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:1px 8px}}
+.card{{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:8px}}
+.brake{{margin:0 0 10px;font-weight:600}} .brake.on{{color:var(--warn)}}
+.meter{{margin-top:10px}} .mh{{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}} .mh b{{color:var(--ink);font-weight:500}}
+.track{{height:6px;border-radius:3px;background:var(--off);margin-top:5px;overflow:hidden}}
+.track span{{display:block;height:100%;border-radius:3px}} .track .ok{{background:var(--upline)}} .track .warm{{background:var(--warn)}} .track .hot{{background:var(--down)}}
+.rules{{font-size:12px;color:var(--dim);margin:12px 0 0}}
 ul{{list-style:none;padding:0;margin:0}} li{{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;overflow-wrap:anywhere}}
 time{{color:var(--muted);font-size:12px;margin-right:8px}}
 details{{margin-top:30px}} summary{{cursor:pointer;font-weight:600}} summary:focus-visible{{outline:2px solid var(--focus);outline-offset:2px}}
 pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 "Geist Mono",monospace;color:var(--muted)}}
-footer{{color:var(--muted);font-size:12px;margin-top:28px}}
+footer{{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.6}}
 </style></head><body><main>
-<header><p class="eyebrow">Mission Control {light}</p><span class="badge">Paper money</span></header>
+<header><p class="eyebrow">Mission Control {light}</p><span class="badge">{e(mode)}</span></header>
 <p class="hero" id="hero">{hero}</p>
 <p class="chg {kind}" id="chg">{change} <small id="when">this week</small></p>
 <div class="chart {kind}" id="chart" tabindex="0" role="img" aria-label="Account value over the last checks. Use left and right arrow keys to read values.">
 <div class="empty-chart">The chart fills in as the Robot checks the account every 15 minutes while the market is open.</div></div>
+<div class="tiles">
+<div class="tile"><span>Today</span><b class="{t_kind}">{e(t_change.split(" (")[0])}</b></div>
+<div class="tile"><span>Positions</span><b>{n_pos} of {max_pos}</b></div>
+<div class="tile"><span>Last check (NY)</span><b>{e(updated[11:] or updated)}</b></div>
+</div>
 <div class="signal"><div class="lamps" aria-hidden="true">{lamps}</div><div><b>Market light: {e(light_text)}</b><span>Plan {e(d["plan_date"])}</span></div></div>
 <h2>Today's plan</h2>{pick_rows}
+<div class="chips"><span>Buy orders waiting</span>{waiting}</div>
+{plan_rows}
 <h2>Positions</h2>{pos_rows}
-<h2>Safety</h2>{safety_rows}
+<h2>Safety brakes</h2><div class="card">{brake}{meters}<p class="rules">{e(rules)}</p></div>
 <h2>Activity</h2><ul>{feed or '<li class="empty">Nothing yet.</li>'}</ul>
 <details><summary>Diary</summary><pre>{e(d["diary"])}</pre></details>
-<footer>Last Robot check: {e(updated)}. This page updates after each Claude run, not live.</footer>
+<footer>Last Robot check: {e(updated)}.<br>{SCHEDULE}. Telegram tells you about trades right away.</footer>
 </main>
 <script type="application/json" id="data">{data}</script>
 <script>
@@ -227,16 +318,15 @@ footer{{color:var(--muted);font-size:12px;margin-top:28px}}
   var cross = el("line", {{class: "cross", y1: 0, y2: H, visibility: "hidden"}});
   box.innerHTML = ""; box.appendChild(svg);
   var dot = document.createElement("span");
-  dot.style.cssText = "position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);visibility:hidden;pointer-events:none";
-  dot.className = "dotx"; box.appendChild(dot);
-  var color = getComputedStyle(box).getPropertyValue(box.classList.contains("down") ? "--down" : box.classList.contains("up") ? "--upline" : "--muted");
-  dot.style.background = color; dot.style.boxShadow = "0 0 0 2px var(--card)";
+  dot.style.cssText = "position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);visibility:hidden;pointer-events:none;box-shadow:0 0 0 2px var(--card)";
+  dot.style.background = getComputedStyle(box).getPropertyValue(box.classList.contains("down") ? "--down" : box.classList.contains("up") ? "--upline" : "--muted");
+  box.appendChild(dot);
   var orig = [hero.textContent, chg.className, chg.firstChild.textContent, when.textContent], cur = pts.length - 1;
   var fmt = function(v){{return "$" + v.toLocaleString("en-US", {{minimumFractionDigits: 2, maximumFractionDigits: 2}});}};
   function show(i){{
-    cur = i; var p = pts[i], r = box.getBoundingClientRect(), px = x(i) / W * r.width;
+    cur = i; var p = pts[i], r = box.getBoundingClientRect();
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
-    dot.style.left = px + "px"; dot.style.top = (y(p[1]) / H * 180) + "px"; dot.style.visibility = "visible";
+    dot.style.left = (x(i) / W * r.width) + "px"; dot.style.top = (y(p[1]) / H * 180) + "px"; dot.style.visibility = "visible";
     hero.textContent = fmt(p[1]);
     if (d.base) {{ var diff = p[1] - d.base, k = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
       chg.className = "chg " + k;

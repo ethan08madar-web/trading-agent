@@ -35,6 +35,19 @@ class DashboardTest(unittest.TestCase):
         self.assertIn("▲ +$12.50 (+1.25%)", page)
         self.assertIn('class="chg up"', page)
 
+    def test_detail_numbers(self):
+        nb = tempfile.mkdtemp()
+        os.makedirs(os.path.join(nb, "plan"))
+        with open(os.path.join(nb, "plan", "2026-11-09.json"), "w", encoding="utf-8") as f:
+            json.dump({"picks": [{"symbol": "ABC", "entry_max": 50, "stop": 47.5, "target": 56}]}, f)
+        with open(os.path.join(nb, "state.json"), "w", encoding="utf-8") as f:
+            json.dump({"positions": {"XYZ": {"entry": 10, "stop": 9, "target": 12}}, "last_prices": {"XYZ": 11},
+                       "loss_streak": 2, "pending": {"QQQ": {}}}, f)
+        page = render(nb)
+        for text in ("risks 5.0% to the stop", "reward 2.4× the risk", "▲ +10.00%", "18.2% above stop",
+                     "+9.1% to target", "width:67%", "2 of 3", "QQQ", 'data-theme="dark"'):
+            self.assertIn(text, page)
+
     def test_torn_trades_line_keeps_other_lines(self):
         nb = tempfile.mkdtemp()
         with open(os.path.join(nb, "trades.jsonl"), "w", encoding="utf-8") as f:

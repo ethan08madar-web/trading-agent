@@ -102,7 +102,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-06 | New $1,000 paper account instead of keeping $100k | Alpaca has no reset; a new account makes sizing match real money (Ethan chose it knowing keys change) | Keep $100k and add an "act as $1,000" setting (extra code to remove before live; buying power still $100k) |
 | 2026-11-06 | Own cloud environment `trading-agent`, keys in its plain Environment variables | Network secrets can't inject Alpaca's custom headers, FMP's query param or Telegram's URL token; keys are paper/free/low-risk; a separate env keeps them out of other projects | Default env (shared with other projects); network secrets (don't fit) |
 | 2026-11-06 | Routines run with connectors cleared | The server attaches Gmail/Drive/Calendar by default; trading jobs read untrusted web data and must not reach email | Default connectors |
-| 2026-11-06 | Mission Control: broker-style page (big value, scrub chart, lamps), original design | Ethan asked for a Robinhood-like look; copying a real brand's look is out, the genre layout is fine | Literal Robinhood copy; old tables |
+| 2026-11-06 | Mission Control: broker-style page (big value, scrub chart, lamps), original design; always dark (Ethan asked) — light tokens kept under `data-theme="light"` | Ethan asked for a Robinhood-like look; copying a real brand's look is out, the genre layout is fine | Literal Robinhood copy; old tables |
 | 2026-11-06 | Robot sends one Telegram card per check | Several events per check were several texts; one card is easier to read | One text per event |
 
 ## Implementation Notes

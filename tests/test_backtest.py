@@ -2,7 +2,7 @@ import operator
 import random
 import unittest
 
-from backtest import data, indicators, market, rulebooks
+from backtest import data, engine, indicators, market, rulebooks
 
 
 def walk(n, seed=1, start=100.0):
@@ -66,6 +66,37 @@ class RulebookTest(unittest.TestCase):
         self.assertIsNotNone(rulebooks.twin(x, 2, False, S))
         x["v"][2] = 900  # no extra volume: not a burst
         self.assertIsNone(rulebooks.twin(x, 2, False, S))
+
+
+class EngineTest(unittest.TestCase):
+    """One stock, worked out by hand. The finder fires only on day 0: buy up to 10, stop 9, target 12."""
+
+    def replay(self, day1_open):
+        rows = [(10, 10, 10, 10), (day1_open, 10.2, min(9.7, day1_open), 10), (11, 12.5, 10.9, 12), (9.5, 9.6, 9.4, 9.5)]
+        bars = [{"t": f"2019-01-0{i + 2}", "o": o, "h": h, "l": l, "c": c, "v": 1}
+                for i, (o, h, l, c) in enumerate(rows)]
+        x = indicators.series(bars)  # 4 bars: no 20-day average yet, so only stop/target act
+        days = x["t"]
+        book = {"name": "t", "sleeve": None,
+                "find": lambda x, i, leader, s: {"entry_max": 10, "stop": 9, "target": 12, "score": 1} if i == 0 else None}
+        return engine.run(book, {"AAA": x}, days, {d: ("green", False) for d in days},
+                          {d: set() for d in days}, {d: {"AAA"} for d in days}, S)
+
+    def test_hand_checked_trade(self):
+        r = self.replay(9.8)
+        # day 1: 10 shares (1% risk: $10 / $1) at 9.8 + 0.1% = 9.8098
+        # day 2: target 12 hit -> 5 sold at 12 - 0.1% = 11.988, stop moved to entry 9.8098
+        # day 3: opens 9.5, below the stop -> 5 sold at 9.5 - 0.1% = 9.4905
+        self.assertEqual(len(r["trades"]), 1)
+        t = r["trades"][0]
+        self.assertEqual((t["in"], t["out"], t["why"]), ("2019-01-03", "2019-01-05", "stop"))
+        self.assertAlmostEqual(t["pnl_pct"], (5 * 11.988 + 5 * 9.4905) / 98.098 - 1, places=9)
+        self.assertAlmostEqual(r["equity"][-1][1], 1000 - 98.098 + 59.94 + 47.4525, places=6)
+
+    def test_gap_below_stop_never_buys(self):
+        r = self.replay(8.9)
+        self.assertEqual(r["trades"], [])
+        self.assertEqual(r["equity"][-1][1], 1000)
 
 
 class LightTest(unittest.TestCase):

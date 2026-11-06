@@ -2,7 +2,7 @@ import operator
 import random
 import unittest
 
-from backtest import data, indicators, market
+from backtest import data, indicators, market, rulebooks
 
 
 def walk(n, seed=1, start=100.0):
@@ -33,6 +33,39 @@ class IndicatorTest(unittest.TestCase):
             for key in full:
                 if key != "idx":
                     self.assertEqual(part[key][k - 1], full[key][k - 1], f"{key} at {k} sees the future")
+
+
+S = {"risk_per_trade": 0.01, "max_position": 0.30, "max_positions": 4,
+     "max_stop_distance": 0.15, "week_loss_limit": 0.05, "loss_streak_limit": 3}
+
+
+def fake(**cols):
+    """A 3-day series with just the columns a finder test needs; the rest are None."""
+    keys = ("c", "v", "sma20", "sma50", "sma200", "low10", "high10", "low50", "high50",
+            "high252", "prev_high20", "vol50", "rs")
+    return {k: cols.get(k, [None] * 3) for k in keys}
+
+
+class RulebookTest(unittest.TestCase):
+    def test_pick(self):
+        self.assertIsNone(rulebooks.pick(100, 80, 1, S))  # stop 20% away: the Robot would refuse it
+        self.assertEqual(rulebooks.pick(100, 95, 1, S),
+                         {"entry_max": 100, "stop": 95, "target": 110, "score": 1})
+
+    def test_breakout_needs_leader_high_and_volume(self):
+        x = fake(c=[100, 100, 110], prev_high20=[None, None, 105], v=[1000, 1000, 3000],
+                 vol50=[1000, 1000, 1000], low10=[95, 95, 98], rs=[0.5, 0.5, 0.5])
+        k = rulebooks.breakout(x, 2, True, S)
+        self.assertEqual((k["entry_max"], k["stop"]), (111.1, 97.02))
+        self.assertIsNone(rulebooks.breakout(x, 2, False, S))
+        x["v"][2] = 1200
+        self.assertIsNone(rulebooks.breakout(x, 2, True, S))
+
+    def test_twin_momentum_burst(self):
+        x = fake(c=[100, 101, 106], v=[1000, 1000, 2000], low10=[95, 95, 96], rs=[None, None, 0.2])
+        self.assertIsNotNone(rulebooks.twin(x, 2, False, S))
+        x["v"][2] = 900  # no extra volume: not a burst
+        self.assertIsNone(rulebooks.twin(x, 2, False, S))
 
 
 class LightTest(unittest.TestCase):

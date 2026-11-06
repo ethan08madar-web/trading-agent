@@ -64,7 +64,7 @@ broker app ("like Robinhood"), and make Telegram messages easier to read.
 - **Environment:** reopened its settings: "Limited · 10 domains", "Setup script 3 lines", "7 variables".
 - **Routines:** `RemoteTrigger` update responses show `mcp_connections: []` for all 4.
 - **Plan run:** `get_run_log` read in full; commit 191af77 seen via `git fetch`.
-- **Tests:** 74/74. Verify-the-verifier: removing the equity cap → red; renaming `telegram.card` in main →
+- **Tests:** 73/73 (74/74 after the later dark-mode change). Verify-the-verifier: removing the equity cap → red; renaming `telegram.card` in main →
   red (it was green before `test_one_telegram_card_per_check` existed, i.e. the path had been untested).
 - **Dashboard:** sample notebook rendered and served via `launch.json` http.server; Browser pane at 375 px
   (scrollWidth 375 = no sideways scroll) and desktop, light and dark, console clean. Scrub moved the hero

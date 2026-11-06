@@ -13,7 +13,10 @@ Notable changes to **this project**, newest first. One dated block per working s
 - `Broker.daily_bars` returns full daily bars; `daily_closes` now uses it.
 - Mission Control redesigned as a broker-style phone page: big account value with week change, a line chart you can scrub (mouse, touch, arrow keys), market-light lamps, plan/positions rows with P&L.
 - The Robot saves `equity_history` (last 400 checks) in `state.json` to feed that chart.
-- Telegram: the Robot sends one bold-titled card per check instead of one text per event; routines send cards with `python -m robot.telegram "Title" "line" ...`. 4 new tests (74 total).
+- Telegram: the Robot sends one bold-titled card per check instead of one text per event; routines send cards with `python -m robot.telegram "Title" "line" ...`. 4 new tests (73 total).
+- Mission Control is always dark, with more detail: today/positions/last-check tiles; per pick the risk to
+  stop, upside and reward-to-risk; per position a stop→target bar with distances; waiting buy orders; plan
+  details (version, cancels, earnings sells, SPY sleeve); safety-brake meters and the rule limits. 1 new test (74 total).
 - Paper account switched to $1,000; cloud environment `trading-agent` and the 4 routines created (connectors cleared).
 - Environment: `tradermonty.github.io` allowed (market-breadth CSV) and a setup script that pip-installs requests/pyyaml/numpy/pandas.
 

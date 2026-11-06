@@ -14,6 +14,13 @@ MEMBERS_URL = ("https://raw.githubusercontent.com/fja05680/sp500/master/"
 YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/{}?period1={}&period2={}&interval=1d&events=div%2Csplits"
 CACHE = os.path.join(os.path.dirname(__file__), "cache")
 START = "2018-01-01"  # a year before 2019, so 200-day averages and 12-month strength exist
+# Same company, new ticker (checked 2026-11-06: Yahoo has its full history from 2018 under the new one).
+# Companies bought by a different company are NOT mapped: the buyer's prices would be wrong.
+RENAMED = {"ABC": "COR", "ANTM": "ELV", "BLL": "BALL", "FBHS": "FBIN", "FLT": "CPAY", "JEC": "J",
+           "PKI": "RVTY", "RE": "EG", "WLTW": "WTW", "GPS": "GAP", "HFC": "DINO", "NLOK": "GEN",
+           "SYMC": "GEN", "TMK": "GL", "CTL": "LUMN", "UTX": "RTX", "ADS": "BFH", "DWDP": "DD",
+           "BHGE": "BKR", "ARNC": "HWM", "HRS": "LHX", "FI": "FISV", "MMC": "MRSH", "BK": "BNY",
+           "HCP": "DOC", "PEAK": "DOC", "MYL": "VTRS"}
 
 
 def _get(url):
@@ -40,6 +47,8 @@ def members_on(rows, day):
 def yahoo_bars(payload):
     """Yahoo chart JSON -> [{t, o, h, l, c, v}] adjusted for splits and dividends; bad rows dropped."""
     res = payload["chart"]["result"][0]
+    if not res.get("timestamp"):  # Yahoo keeps an empty shell for some bought-out companies
+        return []
     q, adj = res["indicators"]["quote"][0], res["indicators"]["adjclose"][0]["adjclose"]
     out = []
     for i, ts in enumerate(res.get("timestamp") or []):
@@ -72,7 +81,7 @@ def bars(sym, refresh=False):
     """Cached daily bars for sym from START, or [] if Yahoo has none (most companies that stopped trading)."""
     def fetch():
         p1 = int(datetime.fromisoformat(START).replace(tzinfo=timezone.utc).timestamp())
-        url = YAHOO.format(sym.replace(".", "-"), p1, int(time.time()))
+        url = YAHOO.format(RENAMED.get(sym, sym).replace(".", "-"), p1, int(time.time()))
         time.sleep(0.3)  # be polite to a free service
         try:
             return json.dumps(yahoo_bars(json.loads(_get(url))))

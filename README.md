@@ -179,6 +179,13 @@ python -m backtest.run           # tune years only
 python -m backtest.run --final   # also the hidden years
 ```
 
+**First results (2026-11-06, [full report](backtest/results/2026-11-06-final.md)):** no rulebook
+passed. Just holding SPY made the most money in both periods. The most consistent stock-picker
+was **B** (profitable in both periods, smaller drops than SPY, but about half SPY's return). The
+replay also found that today's bot can buy a stock under its 20-day average and sell it at the
+same day's close. The 2024 → today exam has now been used, so later changes need a fresh one
+(more time passing, or paper results).
+
 Free data, no keys: Yahoo daily prices and the list of past S&P 500 members
 ([fja05680/sp500](https://github.com/fja05680/sp500), MIT). Each report lists what it can't
 tell you (daily prices only, no earnings dates, no Claude).

@@ -143,6 +143,10 @@ class DataTest(unittest.TestCase):
                             "adjclose": [{"adjclose": [50, 1]}]}}]}}
         self.assertEqual(data.yahoo_bars(p), [{"t": "2019-01-02", "o": 50, "h": 55, "l": 45, "c": 50, "v": 5}])
 
+    def test_empty_shell_is_no_data(self):
+        p = {"chart": {"result": [{"meta": {}, "indicators": {"quote": [{}], "adjclose": [{}]}}]}}
+        self.assertEqual(data.yahoo_bars(p), [])
+
 
 if __name__ == "__main__":
     unittest.main()

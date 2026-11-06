@@ -76,7 +76,7 @@ def run(book, X, days, lights, leaders, members_by_day, s, start_cash=1000.0):
                 if avg and c < avg:
                     close_out(sym, m, c * (1 - SLIP), day, f"closed below its {sl['exit_avg'][3:]}-day average")
                 continue
-            why = safety.exit_reason(m, lo, hi, c, x["sma20"][j])
+            why = safety.exit_reason(m, lo, hi, c, x[book.get("exit_avg", "sma20")][j])
             if why == "stop":
                 close_out(sym, m, min(op, m["stop"]) * (1 - SLIP), day, "stop")
             elif why == "avg20":

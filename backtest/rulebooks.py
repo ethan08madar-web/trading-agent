@@ -64,10 +64,14 @@ SLEEVE = {"weight": 0.30, "entry_avg": "sma50", "exit_avg": "sma50", "need_green
 # params = knobs a person could tune (the backtest-expert evaluator penalises many)
 BOOKS = [
     {"name": "A. Today's bot (twin)", "find": twin, "sleeve": SLEEVE, "params": 7},
-    {"name": "A+. Today's bot, never buying below its 20-day average", "find": twin_fixed, "sleeve": SLEEVE,
-     "params": 7},
-    {"name": "B. Momentum leaders, bought on a dip", "find": pullback, "sleeve": SLEEVE, "params": 5},
-    {"name": "C. Momentum leaders, bought on a breakout", "find": breakout, "sleeve": SLEEVE, "params": 5},
+    # Tuned on 2019-2023 (2026-11-06): the 20-day sell line cut winners short (median hold ~1 day);
+    # the 50-day line turned A+ and B profitable there. Exit choice = 1 more knob each.
+    {"name": "A+. Today's bot fixed (buy above 20-day avg, sell below 50-day)", "find": twin_fixed,
+     "sleeve": SLEEVE, "exit_avg": "sma50", "params": 8},
+    {"name": "B. Momentum leaders on a dip (sell below 50-day)", "find": pullback, "sleeve": SLEEVE,
+     "exit_avg": "sma50", "params": 6},
+    {"name": "C. Momentum leaders on a breakout (sell below 50-day)", "find": breakout, "sleeve": SLEEVE,
+     "exit_avg": "sma50", "params": 6},
     {"name": "D. Trend only (SPY above its 200-day)", "find": None,
      "sleeve": {"weight": 1.0, "entry_avg": "sma200", "exit_avg": "sma200", "need_green": False}, "params": 1},
 ]

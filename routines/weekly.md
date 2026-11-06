@@ -13,4 +13,6 @@ Same hard rules as `routines/plan.md`.
      - trades and paper P&L, for interest only
    - What to keep or change (ideas only — Ethan decides; never edit settings.yaml).
    - Be honest: a week is far too short to judge profit.
-4. Commit, push, Telegram "📊 Weekly review ready", update Mission Control.
+4. Commit, push, then Telegram with `python -m robot.telegram` (see plan.md step 10):
+   title "📊 Weekly review — week <ww>", then "**Week:** ▲/▼ \$X (Y%)", "**Trades:** N (W won, L lost)",
+   "**Safety rules broken:** 0", one line on the biggest lesson, and the Mission Control link. Update Mission Control.

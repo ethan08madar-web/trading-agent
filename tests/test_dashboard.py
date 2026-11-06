@@ -25,6 +25,16 @@ class DashboardTest(unittest.TestCase):
         self.assertNotIn("<b>x</b>", page)
         self.assertIn("XYZ", render_markdown(nb))
 
+    def test_portfolio_value_and_week_change(self):
+        nb = tempfile.mkdtemp()
+        with open(os.path.join(nb, "state.json"), "w", encoding="utf-8") as f:
+            json.dump({"week_start_equity": 1000, "equity_history": [["2026-11-09T10:00", 1000],
+                       ["bad"], ["2026-11-09T10:15", "x"], ["2026-11-09T10:30", 1012.5]]}, f)
+        page = render(nb)
+        self.assertIn("$1,012.50", page)
+        self.assertIn("▲ +$12.50 (+1.25%)", page)
+        self.assertIn('class="chg up"', page)
+
     def test_torn_trades_line_keeps_other_lines(self):
         nb = tempfile.mkdtemp()
         with open(os.path.join(nb, "trades.jsonl"), "w", encoding="utf-8") as f:

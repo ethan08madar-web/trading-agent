@@ -58,6 +58,16 @@ class TelegramTest(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", side_effect=OSError("down")):
             self.assertFalse(telegram.send("t", "c", "hi"))
 
+    def test_card_bolds_and_escapes(self):
+        c = telegram.card("📋 Plan <ready>", ["**2 picks:** A&B", "", "x < y"], "Paper money")
+        self.assertEqual(c, "<b>📋 Plan &lt;ready&gt;</b>\n\n<b>2 picks:</b> A&amp;B\n\nx &lt; y\n\n<i>Paper money</i>")
+
+    def test_html_mode_sets_parse_mode(self):
+        sent = {}
+        with mock.patch("urllib.request.urlopen", lambda url, data, timeout: sent.update(d=data)):
+            self.assertTrue(telegram.send("t", "c", "<b>x</b>", True))
+        self.assertIn(b"parse_mode=HTML", sent["d"])
+
 
 if __name__ == "__main__":
     unittest.main()

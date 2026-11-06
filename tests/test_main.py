@@ -305,6 +305,13 @@ class ReviewFixesTest(unittest.TestCase):
         run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 49.0}, [holding()]), FakeOrders())
         self.assertNotIn("exit_price", st["positions"]["ABC"])
 
+    def test_equity_history_appended_and_capped(self):
+        from robot.main import EQUITY_POINTS
+        st = state_with(equity_history=[["old", 1.0]] * EQUITY_POINTS)
+        run_check(S, OPEN, plan(), [], st, FakeBroker(equity=1012.345), FakeOrders())
+        self.assertEqual(len(st["equity_history"]), EQUITY_POINTS)
+        self.assertEqual(st["equity_history"][-1], ["2026-11-09T10:00-05:00", 1012.35])
+
     def test_filled_event(self):
         st = state_with(pending={"ABC": {"stop": 47.5, "target": 56.0}})
         ev = run_check(S, OPEN, plan(), [], st, FakeBroker({"ABC": 50.0}, [holding()]), FakeOrders())
@@ -397,6 +404,50 @@ class MainCliTest(unittest.TestCase):
                 main.main(["--notebook", str(nb)])
         lines = (nb / "trades.jsonl").read_text(encoding="utf-8").splitlines()
         self.assertEqual([json.loads(l)["type"] for l in lines], ["buy"])
+
+    def test_one_telegram_card_per_check(self):
+        import json
+        import os
+        import pathlib
+        import tempfile
+        from unittest import mock
+
+        from robot import main
+
+        class FB:
+            def __init__(self, *a): pass
+            def clock(self): return OPEN
+            def account(self): return {"equity": "1000", "cash": "1000"}
+            def positions(self): return []
+            def daily_closes(self, s, n, before): return []
+            def latest_price(self, s): return 49.0
+
+        class FakePO:
+            def __init__(self, *a): pass
+            def open_orders(self): return []
+            def buy_limit(self, *a): pass
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        nb = pathlib.Path(tempfile.mkdtemp())
+        (nb / "plan").mkdir()
+        (nb / "settings.yaml").write_text((root / "notebook" / "settings.yaml").read_text(encoding="utf-8"),
+                                          encoding="utf-8")
+        (nb / "plan" / "2026-11-09.json").write_text(json.dumps(
+            plan(picks=[PICK, {**PICK, "symbol": "DEF"}])), encoding="utf-8")
+        sent = []
+        env = {"APCA_API_KEY_ID": "x", "APCA_API_SECRET_KEY": "y", "TELEGRAM_BOT_TOKEN": "t",
+               "TELEGRAM_CHAT_ID": "c"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(main, "Broker", FB), \
+                mock.patch.object(main.telegram, "send", lambda *a: sent.append(a) or True), \
+                mock.patch("robot.paper_orders.PaperOrders", FakePO):
+            main.main(["--notebook", str(nb)])
+        self.assertEqual(len(sent), 1)
+        token, chat, text, as_html = sent[0]
+        self.assertTrue(as_html)
+        self.assertTrue(text.startswith("<b>🤖 Robot check · 10:00 ET</b>"))
+        self.assertIn("ABC", text)
+        self.assertIn("DEF", text)
+        self.assertTrue(text.endswith("<i>Paper money</i>"))
 
 
 if __name__ == "__main__":

@@ -113,3 +113,123 @@ See CLAUDE.md Important Decisions (2026-11-06 rows):
 - He confirmed "done"/"made it" steps honestly this session, but every step was still checked in Claude's
   own tab.
 - He asked for a Robinhood look. Claude built an original broker-style design and said so.
+
+---
+
+# Session 2 — 2026-11-06 — README, research upgrade, scoreboard
+
+**Branch:** `docs/readme`, `docs/research-upgrade-spec`, `feat/scoreboard`, `fix/same-day-clash` (all merged into `main` and deleted)
+
+## Goals
+
+Ethan asked for a plain-language explanation of how the bot researches, buys and sells; then a
+README holding it plus the Mission Control link; then "as much research as possible before buying",
+including a "time machine" that makes thousands of predictions. He handed the design choices to
+Claude: "do what you think will perform best… we'll test it out."
+
+## Completed
+
+- `README.md`: plain-language guide (market light, screeners, research checks, sizing example,
+  sell rules, safety brake, real-money rule) + Mission Control link + scoreboard section.
+- Design spec `docs/superpowers/specs/2026-11-06-research-upgrade-design.md`: 3 pieces in order —
+  (1) scoreboard, (2) per-stock history + odds, (3) extra layers, each kept only if the scoreboard
+  shows it helps. Plan `docs/superpowers/plans/2026-11-06-scoreboard.md`. **Piece 1 built.**
+- `backtest/` (stdlib only): `data.py` (Yahoo daily bars, past S&P 500 members from fja05680/sp500
+  (MIT), cache in gitignored `backtest/cache/`, 27 renamed tickers mapped), `indicators.py`,
+  `market.py` (light from prices + top-10% leaders), `rulebooks.py`, `engine.py`, `report.py`,
+  `run.py` (`python -m backtest.run [--final] [--refresh]`).
+- `safety.exit_reason`: the Robot's sell order in one function shared by the Robot and the replay.
+- Live fix (Ethan said "Yes, fix it"): the Robot never buys below the 20-day average; `robot/research.py`
+  DROPs those; `routines/plan.md` updated.
+- Results in `backtest/results/2026-11-06-report.md` (before tuning) and `-final.md` (after tuning + the
+  one-time 2024→today exam).
+
+## Results (pretend $1,000 each period)
+
+| Rulebook | 2019–2023 | 2024→today |
+|---|---|---|
+| Hold SPY | $2,062 (worst −34%) | $1,602 (worst −19%) |
+| D. SPY only above its 200-day | $1,511 | $1,372 |
+| B. Leaders on a dip, sell below 50-day | $1,288 | $1,284 |
+| A. Today's bot | $968 | $1,203 |
+| A+. Today's bot fixed, sell below 50-day | $1,241 | $955 |
+| C. Leaders on a breakout, sell below 50-day | $1,023 | $1,015 |
+
+Nothing passed the pass mark. B is the most consistent (profitable both periods; backtest-expert
+"DEPLOY" on the tune years). A flipped from losing to winning between periods: unreliable. The
+Careful limits keep only about 2.5 small positions open on average (about a third of the money
+invested), which caps returns versus 100%-invested SPY.
+
+## Files Changed
+
+| File | Change |
+|---|---|
+| `README.md` | new: guide, Mission Control link, scoreboard section, buy step 4 |
+| `backtest/*` | new: the scoreboard |
+| `backtest/results/2026-11-06-{report,final}.md` | new: results |
+| `robot/safety.py` | `exit_reason` added |
+| `robot/main.py` | exits use `exit_reason`; buy skipped below 20-day average |
+| `robot/research.py` | DROP below 20-day average |
+| `routines/plan.md` | DROP reasons list the 20-day average |
+| `tests/test_backtest.py` | new (14 tests) |
+| `tests/test_safety.py`, `test_main.py`, `test_research.py` | exit order, buy guard, research DROP |
+| `.gitignore` | `backtest/cache/` |
+| `docs/superpowers/specs/…research-upgrade-design.md`, `plans/…scoreboard.md` | new |
+| `CLAUDE.md`, `CHANGELOG.md` | status, rules, decisions, notes |
+
+## How It Was Verified
+
+- Full suite: 91 tests pass (`python -m unittest discover -s tests`), run again after each merge into `main`.
+- `exit_reason` move: the new test failed before the function existed; all existing Robot tests pass unchanged.
+- No future data: a test compares each indicator computed on a prefix with the full series; proven by
+  making `sma20` peek one day ahead → the test failed; restored from a copy → it passes.
+- Engine: a hand-worked trade (fill 9.8098, half at 11.988, rest at 9.4905 through a gap) matches to the
+  cent; a gap below the stop never buys.
+- Data: SPY replay $1,000 → $2,062 over 2019–2023 matches SPY's real return (about double with dividends);
+  Yahoo history checked for AAPL/SPY; each renamed ticker checked to have history from 2018-01-02.
+- Live guard: new tests failed first, then passed; fix confirmed in `origin/main:robot/main.py`.
+- **Not verified:** the guard on a real paper trade (no buy yet: red light), and a local dry run (no
+  Alpaca keys on this PC). The `tests.yml` run on GitHub wasn't checked (`gh` isn't installed and the
+  repo is private).
+
+## Decisions Made
+
+- Scoreboard first, then per-stock checks, then layers: without a scoreboard, added research can't be
+  shown to help. Rejected: layers first.
+- Mechanical twin, not Claude: replaying Claude for every day would use up the Pro allowance. Rejected:
+  Claude on a 20-day sample.
+- Pass mark (set before any numbers): return ÷ worst drop beats SPY, no more than 2 points/year behind,
+  at least 100 trades. Rejected: "makes money at all".
+- Yahoo instead of Alpaca `feed=sip`: no Alpaca keys on the PC. Earnings not modelled: a gap-based guess
+  would look like a rule without being one.
+- `manifoldbt-backtester` rejected: one symbol, one entry rule, license restrictions.
+- 50-day sell line chosen on the tune years only. The 2024→today exam was run once and is now **used**.
+- Live buy guard uses strict `price < avg20` to match the exit's `price < avg20` exactly.
+
+## Bugs Fixed
+
+- Same-day round trips in the live bot → the bot could buy under the 20-day average and the 4 PM rule
+  sells anything under it → the Robot skips those buys, research DROPs them.
+- Download crash (`KeyError`) on bought-out tickers → Yahoo returns an empty shell, not a 404 → treated
+  as no data (test added).
+- 27 renamed companies missing → old tickers 404 → `RENAMED` map (same company only; buyers excluded).
+
+## Issues Remaining
+
+- 54 companies have no free history (bought out or bust); listed in each report. Some survivorship bias remains.
+- Replay limits: daily bars, no earnings, no Claude, brake auto-reset on the Monday.
+- Pieces 2–3 not built. Waiting on Ethan's direction.
+
+## Next Steps
+
+1. The paper-test checks from session 1's Next Steps.
+2. Explain the 3 options from the results to Ethan in plain words (keep / switch to B / lean on SPY). His call.
+3. If he picks B: change the morning plan's screeners and the Robot's 20-day sell line to 50-day, with his OK.
+   Judge it on paper results (the exam is used).
+
+## Important Context
+
+- Ethan doesn't know trading terms. Use plain words, small tables and analogies ("flight simulator").
+- He wants best-performing, not a specific tool: "don't just prioritize… the one skill I mentioned."
+- `python -m backtest.run` takes about 1 minute after the first ~20-minute download (Yahoo is slow
+  after about 1,000 requests; two downloaders working from opposite ends of the list halved it).

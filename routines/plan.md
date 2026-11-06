@@ -19,13 +19,23 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
 2. Market light: run `market-breadth-analyzer`, plus `uptrend-analyzer` or `market-top-detector` if
    calls allow. Choose `green`/`yellow`/`red` and `light_falling` (true if breadth is weakening).
 3. If red → no picks. Otherwise find up to 6 swing candidates with `vcp-screener`,
-   `canslim-screener` or `stockbee-momentum-burst-screener`, then for each:
-   - `earnings-calendar`: drop it if earnings are within 3 trading days.
-   - `data-quality-checker`: drop it if the data looks wrong.
-   - `technical-analyst`: entry_max (the highest price worth paying), stop (below support;
-     within 15% of entry), target (at least 2× the risk).
+   `canslim-screener` or `stockbee-momentum-burst-screener`. Note each one's pivot and stop
+   if the screener gives them (`vcp-screener` does). Then check them all in one go — and add
+   every held symbol to the same command for step 4:
+   `python -m robot.research SYM1 SYM2 ...` (1 FMP call in total)
+   - `DROP` lines: leave that stock out (earnings within 3 trading days — any company size —
+     bad or missing price data, or earnings unknown because FMP is unreachable). Don't
+     second-guess a DROP.
+   - `KEEP` lines give the last close, 20/50-day averages, 10-day low, 20-day high, and a
+     default entry_max / stop / target. Use the screener's pivot and stop when it gives them;
+     otherwise start from the defaults. You may raise the stop or lower entry_max, never the
+     other way. Rules: stop below entry_max and within 15% of it; target at least 2× the risk.
+     A KEEP marked "stop is over 15% below" needs a closer real support level, or drop it.
+   - Do not use `earnings-calendar` (it skips companies under $2B), `data-quality-checker`
+     (it checks written reports, not prices) or `technical-analyst` (it needs chart images)
+     for this step.
    - Keep the best 4, ordered best first, each with a one-line `reason`.
-4. Held positions (`state.json` → `positions`):
+4. Held positions (`state.json` → `positions`), from the same `robot.research` output:
    - earnings within 2 days → put it in `sell_earnings`
    - a better stop (higher only) → put it in `stops`
    - Any held position with `stop: null` in state.json must get a stop in `stops` today.

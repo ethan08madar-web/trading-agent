@@ -6,6 +6,12 @@ Notable changes to **this project**, newest first. One dated block per working s
 
 ---
 
+## 2026-11-06
+
+### Changed
+- Plan run checks candidates with new `robot/research.py` (earnings for any company size, bad price data, price levels with a default entry/stop/target) instead of `earnings-calendar`, `data-quality-checker` and `technical-analyst`. 10 new tests (68 total).
+- `Broker.daily_bars` returns full daily bars; `daily_closes` now uses it.
+
 ## 2026-11-05
 
 ### Added

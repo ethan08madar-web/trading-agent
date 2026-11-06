@@ -73,6 +73,12 @@ class TestCheck(unittest.TestCase):
         self.assertTrue(out[0].startswith("KEEP AAA: last $100.00"))
         self.assertEqual(out[1], "DROP ERN: earnings 2026-11-09")
 
+    def test_below_20_day_average_is_dropped(self):
+        # the Robot won't buy under the 20-day average (its close-of-day rule would sell it)
+        out = check(["AAA"], FakeBroker(price=95.0), [], FRI)
+        self.assertEqual(out, ["DROP AAA: $95.00 is below its 20-day average $100.00"
+                               " — the Robot would sell it at the close"])
+
     def test_no_fmp_drops_everything(self):
         out = check(["AAA"], FakeBroker(), None, FRI)
         self.assertEqual(out, ["DROP AAA: earnings date unknown (FMP not reachable)"])

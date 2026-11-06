@@ -95,6 +95,10 @@ def check(symbols, broker, earnings_rows, today):
             lines.append(f"DROP {sym}: {why}")
             continue
         v = levels(price, bars)
+        if price < v["sma20"]:
+            lines.append(f"DROP {sym}: ${price:.2f} is below its 20-day average ${v['sma20']:.2f}"
+                         " — the Robot would sell it at the close")
+            continue
         note = "" if v["stop_ok"] else "  (default stop is over 15% below: needs a closer stop or DROP)"
         lines.append(f"KEEP {sym}: last ${v['last']:.2f} · 20d avg ${v['sma20']:.2f} · 50d avg ${v['sma50']:.2f}"
                      f" · 10d low ${v['low10']:.2f} · 20d high ${v['high20']:.2f}"

@@ -238,6 +238,9 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=
             price = broker.latest_price(sym)
             if not k["stop"] < price <= k["entry_max"]:
                 continue  # not at our price yet (or already through the stop); try again next check
+            avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20)
+            if avg20 and price < avg20:
+                continue  # the close-of-day 20-day rule would sell it the same day (backtest, 2026-11-06)
             buy(sym, qty, k["entry_max"], f", stop ${k['stop']:.2f}", {"stop": k["stop"], "target": k["target"]})
 
     state["last_check"] = now.isoformat()

@@ -84,9 +84,11 @@ Every 15 minutes, for each stock in the plan, the Robot ([robot/main.py](robot/m
 
 1. Is the **safety brake** off? (See Part 4.)
 2. Is there room? (Under the light's limit: 4, 2 or 0 stocks.)
-3. Is the price **between the stop and the "buy up to" price**? If yes, buy. If the price is
-   too high, wait and check again in 15 minutes.
-4. **How much to buy?** It takes the *smallest* of three limits ([robot/safety.py](robot/safety.py)):
+3. Is the price **between the stop and the "buy up to" price**? If the price is too high,
+   wait and check again in 15 minutes.
+4. Is the price **above the stock's 20-day average**? If not, skip it: the 4 PM sell rule
+   would sell it the same day (the scoreboard found this clash on 2026-11-06). If yes, buy.
+5. **How much to buy?** It takes the *smallest* of three limits ([robot/safety.py](robot/safety.py)):
    - If the stop is hit, you lose **no more than 1%** of the account.
    - No single stock is **more than 30%** of the account.
    - It can't spend more cash than there is.

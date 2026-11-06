@@ -160,6 +160,17 @@ class EntryTest(unittest.TestCase):
         run_check(S, OPEN, plan(picks=[PICK]), [], st, FakeBroker({"ABC": 49.8}), o2)
         self.assertEqual(o2.calls, [])  # bought_today: no second order
 
+    def test_no_buy_below_20_day_average(self):
+        # 49.8 is under the 20-day average (51): the close would sell it the same day
+        o = FakeOrders()
+        run_check(S, OPEN, plan(picks=[PICK]), [], state_with(),
+                  FakeBroker({"ABC": 49.8}, closes={"ABC": [51.0] * 20}), o)
+        self.assertEqual(o.calls, [])
+        o = FakeOrders()
+        run_check(S, OPEN, plan(picks=[PICK]), [], state_with(),
+                  FakeBroker({"ABC": 49.8}, closes={"ABC": [49.0] * 20}), o)
+        self.assertEqual(o.calls, [("buy", "ABC", 4, 50.0)])
+
     def test_waits_when_price_above_entry(self):
         o = FakeOrders()
         run_check(S, OPEN, plan(picks=[PICK]), [], state_with(), FakeBroker({"ABC": 50.5}), o)

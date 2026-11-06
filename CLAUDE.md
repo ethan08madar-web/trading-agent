@@ -20,7 +20,7 @@
 
 ## Current Project Status
 
-- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards. **Scoreboard built** (`backtest/`, 2026-11-06): no rulebook beat holding SPY over 2019→today under the Careful limits; B (momentum leaders on a dip, sell below 50-day) most consistent. Open decision for Ethan: what to do with these results (keep rules / switch to B / mostly SPY) and whether to fix the live same-day buy-and-sell clash.
+- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards. **Scoreboard built** (`backtest/`, 2026-11-06): no rulebook beat holding SPY over 2019→today under the Careful limits; B (momentum leaders on a dip, sell below 50-day) most consistent. Same-day buy-and-sell clash fixed in the live bot (2026-11-06). Open decision for Ethan: what to do with these results (keep rules / switch to B / mostly SPY).
 - **Current Goal:** Run the 1-week paper test.
 - **Current Priority:** Check 2026-11-06 market hours: (1) the first Robot check after 09:30 ET writes `week_start_equity: 1000` and an `equity_history` point to `state.json` — proves GitHub has the new account's keys; then Ethan deletes the old $100k paper account PA3FRQ58C. (2) The 12:30 ET Adjust run used the setup script (no pip installs in its log) and reached `tradermonty.github.io`. (3) Ask Ethan how the new Telegram cards look on his phone.
 - **Current Blockers:**
@@ -50,6 +50,7 @@ A swing-trading assistant for Ethan (small account, under $1,000 real money late
 - Trend sleeve: hold SPY (≤30%) when light is green and SPY > 50-day average; sell when it closes below.
 - Exits (defaults, Ethan can change): stop hit → sell; close below 20-day average → sell; earnings within 2 days → sell; target hit → sell half, move stop to entry.
 - Skip stocks with earnings in the next few days.
+- Never buy below the 20-day average (Robot guard + research DROP, 2026-11-06): the close-of-day 20-day sell rule would dump it the same day. Ethan approved after the scoreboard found ~half of today's-bot trades did this.
 - No personalised investment advice — rules are Ethan's choices; Claude explains options.
 
 ## Architecture (built 2026-11-05)

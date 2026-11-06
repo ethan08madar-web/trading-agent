@@ -21,18 +21,16 @@
 ## Current Project Status
 
 - **Current Phase:** Built and connected. Robot runs on GitHub Actions every 15 min (weekdays) against the Alpaca **paper** account. First real run 2026-11-05 17:13 UTC: reached Alpaca, saw no plan, bought nothing, committed state, Telegram ⚠️ reached Ethan's phone.
-- **Current Goal:** Shrink the paper account to ~$1,000, create the 4 Claude routines, then run the 1-week paper test.
-- **Current Priority:** Alpaca paper account holds **$100,000** (default) — Ethan resets it to ~$1,000 (Alpaca dashboard → account menu → reset paper account). If the reset issues new API keys, update `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY` in GitHub secrets.
+- **Current Goal:** Run the 1-week paper test.
+- **Current Priority:** Check the first Plan routine run (2026-11-06 09:00 ET): plan committed, 📋 Telegram, Mission Control updated, then a Robot paper buy; and `state.json` week_start_equity = 1000 (proves GitHub has the new account's keys). Then delete the old $100k paper account.
 - **Current Blockers:**
-  - No Claude routines yet (plan Task 11 step 9) → no daily plan → the Robot only manages exits. Claude can create them itself with `RemoteTrigger`; the cloud environment needs **Custom** network access (Alpaca, FMP, Telegram, Yahoo hosts) and secrets (APCA_*, ALPACA_*, FMP_API_KEY, TELEGRAM_*), which Ethan must set in claude.ai.
-  - No FMP key yet (free plan, financialmodelingprep.com).
-  - Still unproven: a *later* routine run updating the same Mission Control Artifact via its `url`.
+  - Unproven until the first run: the env-variable keys Ethan typed (never seen by Claude), and a routine run updating the same Mission Control Artifact via its `url`.
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
 - **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; dashboard says "Paper money test" always.
 - **Known, parked:** trend-sleeve buy crashes the check if the broker returns price 0 (fails safe, ⚠️ alert); a repeating ❌ "failed" order event is sent every check.
-- **Recommended Next Task:** paper account reset to $1,000 → FMP free key → cloud environment (network + secrets) → Claude creates the 4 routines → trigger the Plan routine once and watch the first paper buy.
+- **Recommended Next Task:** read the first Plan run (`RemoteTrigger list_runs` on the Plan routine → `get_run_log`), fix anything it hit, watch the first paper buy.
 
-*Last updated: 2026-11-05*
+*Last updated: 2026-11-06*
 
 ---
 
@@ -86,7 +84,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 - [x] Spec approved → implementation plan (2026-11-05)
 - [x] Private GitHub repo (2026-11-05)
 - [x] Alpaca paper + Telegram connected; GitHub secrets set (2026-11-05)
-- [ ] Paper account → $1,000; FMP free key; cloud environment; 4 routines
+- [x] Paper account → $1,000; FMP free key; cloud environment; 4 routines (2026-11-06)
 - [x] Build Robot + Claude routines + Mission Control (2026-11-05)
 - [ ] 1-week paper test → decide on FMP paid and real money
 
@@ -112,6 +110,10 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 - `notebook/settings.yaml` can only tighten the Careful limits (ceilings in `robot/settings.py`). Safety brake reset: raise `breaker_reset` by 1.
 - Workflow `robot.yml` commits `notebook/state.json` + `trades.jsonl` even after a failed check, so a crash can't make the next run repeat a trade.
 - Routines: Claude can create/run cloud routines itself with the `RemoteTrigger` tool (via the `schedule` skill) — don't send Ethan to the claude.ai UI. Environment `env_01FCejMLG8cjQetvPVdwjFMJ` (Default). A brand-new repo needs the Claude GitHub app to see it (github.com/settings/installations → Claude; it was already "All repositories", the first 403 cleared on retry a minute later).
+- Routines (created 2026-11-06, Sonnet 5.5, environment `trading-agent` = `env_01F52Mi5WxZm2JmryHCgFBaD`, connectors cleared so they can't touch Gmail/Drive). Cron is UTC, set for EST — **move each 1 hour earlier when DST starts (2027-03-14)**:
+  - Plan `trig_01W3Ga64i76UU82QjtFBBEoS` `0 14 * * 1-5` · Adjust `trig_01WeGYmLKJpi8nkvTcBYK682` `30 17 * * 1-5` · Report `trig_01TqMdLJKymoGujLs2HwRH8Q` `30 21 * * 1-5` · Weekly `trig_018LgFfxKobWoHscJoAbWW7A` `0 15 * * 6`
+- Environment `trading-agent`: network Limited + Alpaca/FMP/Telegram/Yahoo + Artifact domains. Keys are in its **Environment variables** box (Ethan typed them). Network secrets were not usable: they only inject Bearer/Basic/body credentials, and Alpaca uses custom headers, FMP a query param, Telegram a URL path. Never put live Alpaca keys there.
+- Paper account switched 2026-11-06 to a new $1,000 account (PA3ILFRGT); old $100k account PA3FRQ58C to be deleted once the first market-hours check shows week_start_equity 1000. `state.json` was reset to `{}` for the switch.
 - Mission Control Artifact: https://claude.ai/artifact/ESeSSp8YhF3xtomyhf89Wu (created by the spike; routines update it by passing this `url`).
 - GitHub Actions secrets set (2026-11-05): `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Keys were rotated after being pasted in chat (Alpaca regenerated twice, Telegram `/revoke`); current values were never shared.
 - Subagents can't write files whose name contains "report" (a global write hook) — the controller writes those.

@@ -20,7 +20,7 @@
 
 ## Current Project Status
 
-- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards.
+- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards. **Scoreboard built** (`backtest/`, 2026-11-06): no rulebook beat holding SPY over 2019→today under the Careful limits; B (momentum leaders on a dip, sell below 50-day) most consistent. Open decision for Ethan: what to do with these results (keep rules / switch to B / mostly SPY) and whether to fix the live same-day buy-and-sell clash.
 - **Current Goal:** Run the 1-week paper test.
 - **Current Priority:** Check 2026-11-06 market hours: (1) the first Robot check after 09:30 ET writes `week_start_equity: 1000` and an `equity_history` point to `state.json` — proves GitHub has the new account's keys; then Ethan deletes the old $100k paper account PA3FRQ58C. (2) The 12:30 ET Adjust run used the setup script (no pip installs in its log) and reached `tradermonty.github.io`. (3) Ask Ethan how the new Telegram cards look on his phone.
 - **Current Blockers:**
@@ -103,11 +103,13 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-06 | Own cloud environment `trading-agent`, keys in its plain Environment variables | Network secrets can't inject Alpaca's custom headers, FMP's query param or Telegram's URL token; keys are paper/free/low-risk; a separate env keeps them out of other projects | Default env (shared with other projects); network secrets (don't fit) |
 | 2026-11-06 | Routines run with connectors cleared | The server attaches Gmail/Drive/Calendar by default; trading jobs read untrusted web data and must not reach email | Default connectors |
 | 2026-11-06 | Mission Control: broker-style page (big value, scrub chart, lamps), original design; always dark (Ethan asked) — light tokens kept under `data-theme="light"` | Ethan asked for a Robinhood-like look; copying a real brand's look is out, the genre layout is fine | Literal Robinhood copy; old tables |
+| 2026-11-06 | Scoreboard on Yahoo data + past S&P 500 members; tune 2019–2023, one-time exam 2024→today (now used); 50-day sell line chosen on tune years | Ethan: "do what will perform best… we'll test it"; holdout guards against fitting the past | Alpaca data (keys not on PC); gap-based earnings guess (would look like a rule without being one); re-tuning after the exam |
 | 2026-11-06 | Robot sends one Telegram card per check | Several events per check were several texts; one card is easier to read | One text per event |
 
 ## Implementation Notes
 
 - Run tests: `python -m unittest discover -s tests -v` (set `PYTHONIOENCODING=utf-8` on Windows).
+- Scoreboard: `python -m backtest.run` (tune years 2019–2023) / `--final` (adds held-out 2024→today; run once per finished rulebook — tuning after seeing it spoils the exam). Prices cache in `backtest/cache/` (gitignored, ~10 min first download). The exit order lives in `safety.exit_reason`, shared by the Robot and the replay — change it there only.
 - Dry run locally (needs paper keys in env): `PYTHONIOENCODING=utf-8 python -m robot.main --dry-run` — no orders, no files, no Telegram.
 - Plan self-check: `python -m robot.plan notebook/plan/<date>.json <date>`. Mission Control: `python -m robot.dashboard [--markdown]`.
 - Candidate checks for the plan run: `python -m robot.research SYM ...` (needs APCA_* keys; FMP_API_KEY for earnings — without it every candidate is DROPped). It replaced `earnings-calendar` (skips companies under $2B), `data-quality-checker` (checks documents, not prices) and `technical-analyst` (needs chart images) in `routines/plan.md` step 3.

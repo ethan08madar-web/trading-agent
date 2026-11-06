@@ -49,5 +49,16 @@ class RulesTest(unittest.TestCase):
         self.assertIsNone(safety.sma([1], 2))
 
 
+class ExitTest(unittest.TestCase):
+    def test_order(self):
+        m = {"stop": 90, "target": 120, "half_sold": False}
+        self.assertEqual(safety.exit_reason(m, 89, 125, 100, 110), "stop")  # stop beats everything
+        self.assertEqual(safety.exit_reason(m, 95, 125, 100, None, True), "earnings")
+        self.assertEqual(safety.exit_reason(m, 95, 125, 100, 110), "avg20")
+        self.assertEqual(safety.exit_reason(m, 95, 125, 115, 110), "target")
+        self.assertIsNone(safety.exit_reason({**m, "half_sold": True}, 95, 125, 115, 110))
+        self.assertIsNone(safety.exit_reason({**m, "stop": None}, 50, 100, 100, None))
+
+
 if __name__ == "__main__":
     unittest.main()

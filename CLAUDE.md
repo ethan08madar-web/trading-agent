@@ -99,6 +99,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-05 | Claude never presses real-money buy/sell; live Robot has no order code | Safety limit; Ethan asked repeatedly (incl. "tell an agent to press it") and was told no each time | Claude/agent with live keys |
 | 2026-11-05 | MindStudio blog guide used only as inspiration | Its `.claude/routines.json` scheduling is unverified; rule limits contradict each other; no `.env` loading | Following it as written |
 | 2026-11-05 | Plan Task 0 spike passed: a cloud routine (Sonnet 5.5, Default env, no connectors) pushed to `main` directly (commit 48e43be) and republished an Artifact twice at the same URL | Proves the Claude-routine half of the design works without the markdown fallback | `claude/*` branch + Robot reading it; markdown-only Mission Control |
+| 2026-11-06 | One read-only script (`robot/research.py`) checks candidates instead of 3 skills | The skills didn't fit: earnings list skips small companies, data checker reads documents, technical analyst needs chart images and its script is a reversal detector. 1 FMP call for all symbols. | Keeping the skills; per-symbol FMP earnings calls (more of the 250/day); lowering the earnings skill's $2B cutoff (edits third-party code) |
 | 2026-11-05 | Swing + small trend sleeve; Careful risk set; Telegram; paper week with Robot trading fake money | Ethan's choices | — |
 
 ## Implementation Notes
@@ -106,6 +107,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 - Run tests: `python -m unittest discover -s tests -v` (set `PYTHONIOENCODING=utf-8` on Windows).
 - Dry run locally (needs paper keys in env): `PYTHONIOENCODING=utf-8 python -m robot.main --dry-run` — no orders, no files, no Telegram.
 - Plan self-check: `python -m robot.plan notebook/plan/<date>.json <date>`. Mission Control: `python -m robot.dashboard [--markdown]`.
+- Candidate checks for the plan run: `python -m robot.research SYM ...` (needs APCA_* keys; FMP_API_KEY for earnings — without it every candidate is DROPped). It replaced `earnings-calendar` (skips companies under $2B), `data-quality-checker` (checks documents, not prices) and `technical-analyst` (needs chart images) in `routines/plan.md` step 3.
 - `robot/paper_orders.py` is the only order code; `tests/test_live_guard.py` fails if live mode can reach it (proven by inserting an import).
 - `notebook/settings.yaml` can only tighten the Careful limits (ceilings in `robot/settings.py`). Safety brake reset: raise `breaker_reset` by 1.
 - Workflow `robot.yml` commits `notebook/state.json` + `trades.jsonl` even after a failed check, so a crash can't make the next run repeat a trade.

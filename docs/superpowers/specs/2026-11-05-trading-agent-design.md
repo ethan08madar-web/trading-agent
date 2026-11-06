@@ -69,7 +69,7 @@ There is one prompt file per run, and the cloud routine reads it. The 74 install
 
 | Run | Reads | Does | Writes |
 |---|---|---|---|
-| **Plan** 09:00 ET | settings, state, trades, yesterday's diary | Sets the market light (e.g. `market-breadth-analyzer`, `market-environment-analysis`). Screens for swing candidates. Skips stocks with earnings in the next 3 trading days. Runs `data-quality-checker`. Picks entry, stop and target for each pick, with a one-line reason. | `plan/YYYY-MM-DD.json`, Telegram 📋, Mission Control |
+| **Plan** 09:00 ET | settings, state, trades, yesterday's diary | Sets the market light (e.g. `market-breadth-analyzer`, `market-environment-analysis`). Screens for swing candidates. Runs `python -m robot.research` on them (earnings in the next 3 trading days for any company size, bad price data, and price levels — added 2026-11-06 because `earnings-calendar` skips companies under $2B, `data-quality-checker` checks documents not prices, and `technical-analyst` needs chart images). Picks entry, stop and target for each pick, with a one-line reason. | `plan/YYYY-MM-DD.json`, Telegram 📋, Mission Control |
 | **Adjust** 12:30 ET | plan, state | Re-checks the light, cancels picks that broke down, tightens stops. Flags a missing heartbeat. | the same plan file (bumps `version`), Mission Control |
 | **Report** 16:30 ET | everything | Diary entry, P&L, safety meter, FMP calls used | `diary/YYYY-MM-DD.md`, Telegram 📓, Mission Control |
 | **Weekly** (weekend) | the week | Review (`trade-performance-coach`, `signal-postmortem`) | `diary/week-YYYY-WW.md`, Mission Control |
@@ -118,6 +118,7 @@ Small modules, one job each:
 | `robot/broker.py` | Read-only Alpaca calls: clock, account, positions, latest prices. |
 | `robot/paper_orders.py` | The **only** file that can place orders. The URL `https://paper-api.alpaca.markets` is hardcoded in it, not a setting. It is imported only when `mode == paper`. |
 | `robot/telegram.py` | Sends messages. If sending fails, it logs and carries on, never crashes. |
+| `robot/research.py` | Used by **Claude's** plan run, never by the Robot. Read-only checks for candidates: earnings soon (1 FMP call), bad price data, and price levels with a default entry/stop/target. |
 
 **One check, step by step**
 1. Ask Alpaca's clock whether the market is open. If it's closed, exit. The cron runs the
@@ -209,7 +210,8 @@ risk > 1%, a position > 30%, more than 4 positions, a weekly limit > 5%, or a lo
 |---|---|
 | The Robot crashes or can't reach Alpaca | No trades. Telegram ⚠️. Tries again at the next 15-minute check. |
 | No valid plan today (the Claude run failed, or the file is bad) | No new buys. The Robot still manages stops and exits. |
-| Data looks wrong (`data-quality-checker`, or a price of 0 or missing) | Skip that stock. |
+| Data looks wrong (`robot.research`: no price, under 50 days of history, stale or zero bars, or a >10% gap to the last close; the Robot also refuses a price of 0) | Skip that stock. |
+| FMP unreachable when checking earnings | `robot.research` drops every candidate: no new picks that day. |
 | Telegram is down | Everything is still in `trades.jsonl` and `state.json`. |
 | Free FMP limit (250 calls a day) reached | Skip those skills for the day and say so in the report. |
 | Heartbeat: `last_check` is over 1 hour old during market hours | Claude's next run flags it ⚠️ (Telegram + Mission Control). GitHub can delay or skip cron runs when it's busy, and this catches that. |

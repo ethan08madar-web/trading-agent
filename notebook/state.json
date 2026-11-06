@@ -1,17 +1,1 @@
-{
-  "alerted": {
-    "no-plan": "2026-11-05"
-  },
-  "bought_today": [],
-  "breaker_reset_seen": 0,
-  "date": "2026-11-05",
-  "last_check": "2026-11-05T12:13:34.113744-05:00",
-  "last_prices": {},
-  "loss_streak": 0,
-  "pause_reason": "",
-  "paused": false,
-  "pending": {},
-  "positions": {},
-  "week": "2026-W45",
-  "week_start_equity": 100000.0
-}
+{}

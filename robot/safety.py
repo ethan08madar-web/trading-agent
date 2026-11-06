@@ -44,5 +44,20 @@ def is_loss(entry, exit_price):
     return exit_price < entry * 0.995  # stop moved to entry exits near 0: not a loss
 
 
+def exit_reason(m, low, high, close, avg20, sell_earnings=False):
+    """Why to sell a swing position now, or None; checked in this order (spec §4).
+    The Robot passes its one live price as low/high/close; the backtest passes the day's bar.
+    avg20 is None except at the close."""
+    if m["stop"] and low <= m["stop"]:
+        return "stop"
+    if sell_earnings:
+        return "earnings"
+    if avg20 and close < avg20:
+        return "avg20"
+    if m["target"] and not m["half_sold"] and high >= m["target"]:
+        return "target"
+    return None
+
+
 def sma(values, n):
     return sum(values[-n:]) / n if len(values) >= n else None

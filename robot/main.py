@@ -155,13 +155,14 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=
         if m["stop"] is None:  # every check, so it cannot go quiet
             ev("problem", sym, f"⚠️ {sym}: no stop on record for this position — check it")
         avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20) if end_of_day else None
-        if m["stop"] and price <= m["stop"]:
+        why = safety.exit_reason(m, price, price, price, avg20, sym in plan["sell_earnings"])
+        if why == "stop":
             sell(sym, qty, f"stop ${m['stop']:.2f} hit", "🛑", price)
-        elif sym in plan["sell_earnings"]:
+        elif why == "earnings":
             sell(sym, qty, "earnings within 2 days", "📅", price)
-        elif avg20 and price < avg20:
+        elif why == "avg20":
             sell(sym, qty, "below its 20-day average at the close", "📉", price)
-        elif m["target"] and not m["half_sold"] and price >= m["target"]:
+        elif why == "target":
             half = safety.round_qty(qty / 2)
             if half <= 0 or sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}",
                                  "🎯", price):

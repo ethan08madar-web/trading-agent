@@ -2,7 +2,7 @@ import operator
 import random
 import unittest
 
-from backtest import data, engine, indicators, market, rulebooks
+from backtest import data, engine, indicators, market, report, rulebooks
 
 
 def walk(n, seed=1, start=100.0):
@@ -67,6 +67,14 @@ class RulebookTest(unittest.TestCase):
         x["v"][2] = 900  # no extra volume: not a burst
         self.assertIsNone(rulebooks.twin(x, 2, False, S))
 
+    def test_fixed_twin_skips_stocks_below_20_day_average(self):
+        x = fake(c=[100, 101, 106], v=[1000, 1000, 2000], low10=[95, 95, 96], rs=[None, None, 0.2],
+                 sma20=[None, None, 104])
+        self.assertIsNotNone(rulebooks.twin_fixed(x, 2, False, S))
+        x["sma20"][2] = 107  # closed below its 20-day average: the Robot would sell it at this close
+        self.assertIsNone(rulebooks.twin_fixed(x, 2, False, S))
+        self.assertIsNotNone(rulebooks.twin(x, 2, False, S))  # today's bot would still buy it
+
 
 class EngineTest(unittest.TestCase):
     """One stock, worked out by hand. The finder fires only on day 0: buy up to 10, stop 9, target 12."""
@@ -97,6 +105,18 @@ class EngineTest(unittest.TestCase):
         r = self.replay(8.9)
         self.assertEqual(r["trades"], [])
         self.assertEqual(r["equity"][-1][1], 1000)
+
+
+class ReportTest(unittest.TestCase):
+    def test_drawdown(self):
+        self.assertAlmostEqual(report.drawdown([100, 120, 90, 130]), 0.25)
+
+    def test_pass_mark(self):
+        spy = {"cagr": 0.10, "ratio": 0.5}
+        self.assertTrue(report.passes({"cagr": 0.09, "ratio": 0.6}, spy, 150))   # calmer, within 2 points
+        self.assertFalse(report.passes({"cagr": 0.07, "ratio": 0.9}, spy, 150))  # gives up too much return
+        self.assertFalse(report.passes({"cagr": 0.12, "ratio": 0.4}, spy, 150))  # bumpier per unit of return
+        self.assertFalse(report.passes({"cagr": 0.20, "ratio": 2.0}, spy, 99))   # too few trades to trust
 
 
 class LightTest(unittest.TestCase):

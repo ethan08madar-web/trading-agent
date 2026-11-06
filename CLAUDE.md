@@ -108,6 +108,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 ## Implementation Notes
 
 - Run tests: `python -m unittest discover -s tests -v` (set `PYTHONIOENCODING=utf-8` on Windows).
+- Scoreboard: `python -m backtest.run` (tune years 2019–2023) / `--final` (adds held-out 2024→today; run once per finished rulebook — tuning after seeing it spoils the exam). Prices cache in `backtest/cache/` (gitignored, ~10 min first download). The exit order lives in `safety.exit_reason`, shared by the Robot and the replay — change it there only.
 - Dry run locally (needs paper keys in env): `PYTHONIOENCODING=utf-8 python -m robot.main --dry-run` — no orders, no files, no Telegram.
 - Plan self-check: `python -m robot.plan notebook/plan/<date>.json <date>`. Mission Control: `python -m robot.dashboard [--markdown]`.
 - Candidate checks for the plan run: `python -m robot.research SYM ...` (needs APCA_* keys; FMP_API_KEY for earnings — without it every candidate is DROPped). It replaced `earnings-calendar` (skips companies under $2B), `data-quality-checker` (checks documents, not prices) and `technical-analyst` (needs chart images) in `routines/plan.md` step 3.

@@ -9,6 +9,8 @@ Notable changes to **this project**, newest first. One dated block per working s
 ## 2026-11-06
 
 ### Added
+- Scoreboard (`backtest/`): replays 4 rulebooks on 2019→today with the Robot's own rules vs holding SPY; `python -m backtest.run [--final]`. Free Yahoo data + past S&P 500 members. Spec `2026-11-06-research-upgrade-design.md`, plan `2026-11-06-scoreboard.md`.
+- `safety.exit_reason`: the Robot's sell order in one shared function (behaviour unchanged).
 - `README.md`: plain-language explanation of research, buy/sell rules and safety brake, with the Mission Control link.
 
 ### Changed

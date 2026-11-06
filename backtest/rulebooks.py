@@ -31,10 +31,20 @@ def twin(x, i, leader, s):
     return pick(entry, x["low10"][i] * 0.99, x["rs"][i] or 0, s)
 
 
+def _above20(x, i):
+    """The Robot sells anything closing below its 20-day average, so buying below it is a same-day round trip."""
+    return bool(x["sma20"][i] and x["c"][i] > x["sma20"][i])
+
+
+def twin_fixed(x, i, leader, s):
+    """A+: today's bot, but never buying what the 20-day sell rule would sell at the same close."""
+    return twin(x, i, leader, s) if _above20(x, i) else None
+
+
 def pullback(x, i, leader, s):
-    """B: a leader in an uptrend that has dipped back to within 3% of its 20-day average."""
+    """B: a leader in an uptrend that has dipped back to within 3% above its 20-day average."""
     c = x["c"][i]
-    if not (leader and _uptrend(x, i) and x["sma20"][i] and c <= x["sma20"][i] * 1.03 and x["low10"][i]):
+    if not (leader and _uptrend(x, i) and _above20(x, i) and c <= x["sma20"][i] * 1.03 and x["low10"][i]):
         return None
     return pick(c * 1.01, x["low10"][i] * 0.99, x["rs"][i], s)
 
@@ -54,6 +64,8 @@ SLEEVE = {"weight": 0.30, "entry_avg": "sma50", "exit_avg": "sma50", "need_green
 # params = knobs a person could tune (the backtest-expert evaluator penalises many)
 BOOKS = [
     {"name": "A. Today's bot (twin)", "find": twin, "sleeve": SLEEVE, "params": 7},
+    {"name": "A+. Today's bot, never buying below its 20-day average", "find": twin_fixed, "sleeve": SLEEVE,
+     "params": 7},
     {"name": "B. Momentum leaders, bought on a dip", "find": pullback, "sleeve": SLEEVE, "params": 5},
     {"name": "C. Momentum leaders, bought on a breakout", "find": breakout, "sleeve": SLEEVE, "params": 5},
     {"name": "D. Trend only (SPY above its 200-day)", "find": None,

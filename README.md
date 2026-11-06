@@ -159,6 +159,30 @@ ever reach the order code.
 
 ---
 
+## The scoreboard (time machine)
+
+To know whether these rules actually work, the `backtest/` folder replays them on real past
+prices from 2019 to today, with a pretend $1,000 and the Robot's own safety rules. Four
+rulebooks compete against simply holding SPY:
+
+- **A.** Today's bot, as a computer would run it alone (no Claude judgment).
+- **B.** Momentum leaders (the strongest 10% of stocks over the past year) bought on a small dip.
+- **C.** The same leaders bought when they break above their recent high on heavy trading.
+- **D.** Just hold SPY while it's above its 200-day average.
+
+Rules may only be tuned on 2019–2023. The years 2024 → today are kept hidden as a final exam.
+A rulebook passes if it beats holding SPY for return per worst drop, is no more than 2 points a
+year behind it, and made at least 100 trades. Reports are saved in [backtest/results/](backtest/results/).
+
+```bash
+python -m backtest.run           # tune years only
+python -m backtest.run --final   # also the hidden years
+```
+
+Free data, no keys: Yahoo daily prices and the list of past S&P 500 members
+([fja05680/sp500](https://github.com/fja05680/sp500), MIT). Each report lists what it can't
+tell you (daily prices only, no earnings dates, no Claude).
+
 ## For developers
 
 - Project notes, decisions and status: [CLAUDE.md](CLAUDE.md). Design: [docs/superpowers/specs/](docs/superpowers/specs/).

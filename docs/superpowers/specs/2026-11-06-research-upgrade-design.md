@@ -21,7 +21,7 @@ before it is trusted.
 | Build order | 1 scoreboard → 2 per-stock history + odds → 3 extra layers | Each later piece needs the scoreboard to prove it helps | Layers first (nothing proves they help) |
 | What the scoreboard replays | A **mechanical twin**: rules a computer follows alone | Replaying Claude's judgment for every past day would use up the Pro allowance | Claude on a sample of days (tiny sample, costly) |
 | Pass mark | Beat buy-and-hold SPY on the **held-out years**, measured as yearly return ÷ worst drop (higher wins), while also making at least SPY's yearly return minus 2 points; ≥100 trades across the whole 2019→today run | Holding SPY is free and effortless; the bot has to earn its complexity | "Makes money at all" (a weak bar) |
-| Data | Alpaca daily bars, full market feed (`feed=sip`), free | Already used, no new key, 0 FMP calls | FMP history (uses the 250/day free calls) |
+| Data | Yahoo daily bars (adjusted), free, no key — *changed during build: no Alpaca keys on the PC; Yahoo had 2018→today for everything tested* | Runs anywhere, 0 FMP calls | Alpaca `feed=sip` (keys only in GitHub/cloud); FMP history (uses the 250/day free calls) |
 | Stocks tested | Past S&P 500 members **as of each date** (`fja05680/sp500` CSV) | Testing only today's members hides the companies that failed (survivorship bias) | Today's list only |
 | Rule code | Backtest reuses `robot/safety.py`; the exit decision moves from `robot/main.py` into one shared function | One copy of the rules, so the twin can't drift from the real Robot | A separate rule copy, or `manifoldbt-backtester` (one symbol, one entry rule; can't model 4 positions, half-sells or the safety brake; license restrictions) |
 | "Thousands of predictions" | A per-trade odds simulator (bootstrap of the stock's own daily moves), labelled honestly as odds, not a forecast | Random futures can't know direction, but they do measure "stop before target" odds and sensible stop distance | Presenting simulations as predictions |
@@ -46,9 +46,9 @@ per finished rulebook and never used for tuning. This is the guard against "fitt
    stop to entry). A gap below the stop fills at the open, not the stop.
 6. Costs: 0.10% slippage per side (the free broker has no commission).
 
-**Earnings:** past earnings dates aren't free in bulk. The twin approximates "skip earnings" by
-skipping days with an earnings-sized gap (±7% open vs prior close) and notes the gap. Reported
-as a known weakness, not hidden.
+**Earnings:** past earnings dates aren't free in bulk, so the replay does **not** model the
+earnings rules (changed during build: a price-gap guess would look like a rule while not being
+one). Every report says so.
 
 **Rulebooks (contestants), all mechanical:**
 - **A. Today's twin** — the current bot: VCP + momentum-burst patterns, current levels.
@@ -116,6 +116,6 @@ safety limits (1% risk, 4 positions, 30% cap, brake) never loosen.
 ## 8. Known limits (say these out loud in every report)
 
 - Daily bars, not 15-minute checks: fills are approximate.
-- Earnings approximated by price gaps until real past earnings dates are available.
+- Earnings rules not modelled until real past earnings dates are available.
 - Delisted companies may lack Alpaca history; any missing ones are counted and listed.
 - Past results don't guarantee future ones. Passing means "worth paper-testing longer", not "safe".

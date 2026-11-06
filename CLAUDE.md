@@ -20,15 +20,15 @@
 
 ## Current Project Status
 
-- **Current Phase:** Built and connected. Robot runs on GitHub Actions every 15 min (weekdays) against the Alpaca **paper** account. First real run 2026-11-05 17:13 UTC: reached Alpaca, saw no plan, bought nothing, committed state, Telegram ⚠️ reached Ethan's phone.
+- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards.
 - **Current Goal:** Run the 1-week paper test.
-- **Current Priority:** Check the first Plan routine run (2026-11-06 09:00 ET): plan committed, 📋 Telegram, Mission Control updated, then a Robot paper buy; and `state.json` week_start_equity = 1000 (proves GitHub has the new account's keys). Then delete the old $100k paper account.
+- **Current Priority:** Check 2026-11-06 market hours: (1) the first Robot check after 09:30 ET writes `week_start_equity: 1000` and an `equity_history` point to `state.json` — proves GitHub has the new account's keys; then Ethan deletes the old $100k paper account PA3FRQ58C. (2) The 12:30 ET Adjust run used the setup script (no pip installs in its log) and reached `tradermonty.github.io`. (3) Ask Ethan how the new Telegram cards look on his phone.
 - **Current Blockers:**
-  - Unproven: that GitHub holds the *new* account's keys (first market-hours Robot check records week_start_equity — must be 1000); the environment setup script (first used by the next routine run).
+  - Unproven: GitHub keys belong to the new account; environment setup script; the new Telegram card format on a real phone (HTML parse_mode — tested only with mocks).
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
-- **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; dashboard says "Paper money test" always.
+- **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; Mission Control badge says "Paper money" always.
 - **Known, parked:** trend-sleeve buy crashes the check if the broker returns price 0 (fails safe, ⚠️ alert); a repeating ❌ "failed" order event is sent every check.
-- **Recommended Next Task:** read the first Plan run (`RemoteTrigger list_runs` on the Plan routine → `get_run_log`), fix anything it hit, watch the first paper buy.
+- **Recommended Next Task:** `git pull`, read `notebook/state.json` (week_start_equity, equity_history) and `RemoteTrigger list_runs` → `get_run_log` for the latest routine runs; fix anything they hit; watch for the first paper buy on a green/yellow day.
 
 *Last updated: 2026-11-06*
 
@@ -58,7 +58,7 @@ A swing-trading assistant for Ethan (small account, under $1,000 real money late
 - **Robot:** Python on GitHub Actions cron, every 15 min while market is open. Reads the plan, checks prices, runs safety checks, places paper orders (paper week) / sends alerts (live), checks stops for fractional positions. Uses no Claude allowance.
 - **Notebook:** one private GitHub repo — plan, trades, diary, settings. Claude and Robot only communicate through it.
 - **Alpaca:** broker (paper first). Fractional shares can't have broker-side stops → Robot checks them every 15 min; whole shares get real stop orders.
-- **Telegram:** live alerts. **Mission Control** Artifact page: refreshed on each Claude run (not live every 15 min — a ~$5/mo always-on server is the later upgrade if wanted).
+- **Telegram:** live alerts as HTML cards (`robot/telegram.py` `card()`; routines use `python -m robot.telegram "Title" "line" ...`). **Mission Control** Artifact page (broker-style; chart from `state.json` `equity_history`): refreshed on each Claude run (not live every 15 min — a ~$5/mo always-on server is the later upgrade if wanted).
 
 ## Integrations
 
@@ -99,6 +99,11 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-05 | Plan Task 0 spike passed: a cloud routine (Sonnet 5.5, Default env, no connectors) pushed to `main` directly (commit 48e43be) and republished an Artifact twice at the same URL | Proves the Claude-routine half of the design works without the markdown fallback | `claude/*` branch + Robot reading it; markdown-only Mission Control |
 | 2026-11-06 | One read-only script (`robot/research.py`) checks candidates instead of 3 skills | The skills didn't fit: earnings list skips small companies, data checker reads documents, technical analyst needs chart images and its script is a reversal detector. 1 FMP call for all symbols. | Keeping the skills; per-symbol FMP earnings calls (more of the 250/day); lowering the earnings skill's $2B cutoff (edits third-party code) |
 | 2026-11-05 | Swing + small trend sleeve; Careful risk set; Telegram; paper week with Robot trading fake money | Ethan's choices | — |
+| 2026-11-06 | New $1,000 paper account instead of keeping $100k | Alpaca has no reset; a new account makes sizing match real money (Ethan chose it knowing keys change) | Keep $100k and add an "act as $1,000" setting (extra code to remove before live; buying power still $100k) |
+| 2026-11-06 | Own cloud environment `trading-agent`, keys in its plain Environment variables | Network secrets can't inject Alpaca's custom headers, FMP's query param or Telegram's URL token; keys are paper/free/low-risk; a separate env keeps them out of other projects | Default env (shared with other projects); network secrets (don't fit) |
+| 2026-11-06 | Routines run with connectors cleared | The server attaches Gmail/Drive/Calendar by default; trading jobs read untrusted web data and must not reach email | Default connectors |
+| 2026-11-06 | Mission Control: broker-style page (big value, scrub chart, lamps), original design | Ethan asked for a Robinhood-like look; copying a real brand's look is out, the genre layout is fine | Literal Robinhood copy; old tables |
+| 2026-11-06 | Robot sends one Telegram card per check | Several events per check were several texts; one card is easier to read | One text per event |
 
 ## Implementation Notes
 

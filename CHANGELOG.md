@@ -9,6 +9,7 @@ Notable changes to **this project**, newest first. One dated block per working s
 ## 2026-11-06
 
 ### Added
+- Robot never buys a stock below its 20-day average, and the morning research DROPs those (the close-of-day 20-day sell rule would dump them the same day; found by the scoreboard).
 - Scoreboard (`backtest/`): replays 4 rulebooks on 2019→today with the Robot's own rules vs holding SPY; `python -m backtest.run [--final]`. Free Yahoo data + past S&P 500 members. Spec `2026-11-06-research-upgrade-design.md`, plan `2026-11-06-scoreboard.md`.
 - First scoreboard results (`backtest/results/2026-11-06-report.md` = before tuning, `-final.md` = after tuning + the one-time 2024→today exam): nothing beat holding SPY; B most consistent; 20-day sell line cut winners short; today's bot can buy and sell the same stock on the same day.
 - `safety.exit_reason`: the Robot's sell order in one shared function (behaviour unchanged).

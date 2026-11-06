@@ -24,7 +24,8 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
    every held symbol to the same command for step 4:
    `python -m robot.research SYM1 SYM2 ...` (1 FMP call in total)
    - `DROP` lines: leave that stock out (earnings within 3 trading days — any company size —
-     bad or missing price data, or earnings unknown because FMP is unreachable). Don't
+     bad or missing price data, earnings unknown because FMP is unreachable, or price below
+     its 20-day average — the Robot won't buy those because its close-of-day rule would sell them). Don't
      second-guess a DROP.
    - `KEEP` lines give the last close, 20/50-day averages, 10-day low, 20-day high, and a
      default entry_max / stop / target. Use the screener's pivot and stop when it gives them;

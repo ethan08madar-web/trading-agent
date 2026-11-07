@@ -8,6 +8,8 @@ Robot program follows the plan and watches prices. It is running on **paper (fak
 
 > Nothing here is investment advice. The rules below are the owner's own choices.
 
+**Want to run your own copy?** Follow [SETUP.md](SETUP.md).
+
 ---
 
 ## The big picture: two workers

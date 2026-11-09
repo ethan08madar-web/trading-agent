@@ -20,7 +20,7 @@
 
 ## Current Project Status
 
-- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards. **Scoreboard built** (`backtest/`, 2026-11-06): no rulebook beat holding SPY over 2019→today under the Careful limits; B (momentum leaders on a dip, sell below 50-day) most consistent. Same-day buy-and-sell clash fixed in the live bot (2026-11-06). Open decision for Ethan: what to do with these results (keep rules / switch to B / mostly SPY).
+- **Current Phase:** Paper test running. Robot (GitHub Actions, every 15 min) + 4 Claude routines (cloud environment `trading-agent`) are live on a new **$1,000** Alpaca paper account. A manual Plan run on 2026-11-06 passed end to end (red light → no picks). Mission Control is now a broker-style page; Telegram messages are bold-titled cards. **Scoreboard built** (`backtest/`, 2026-11-06): no rulebook beat holding SPY over 2019→today under the Careful limits; B (momentum leaders on a dip, sell below 50-day) most consistent. Same-day buy-and-sell clash fixed in the live bot (2026-11-06). Open decision for Ethan: what to do with these results (keep rules / switch to B / mostly SPY). Mission Control shows "Next update: <day, time> New York time" (2026-11-09).
 - **Current Goal:** Run the 1-week paper test, and decide with Ethan what the scoreboard results mean for the bot's picking rules.
 - **Current Priority:** Check 2026-11-06 market hours: (1) the first Robot check after 09:30 ET writes `week_start_equity: 1000` and an `equity_history` point to `state.json` — proves GitHub has the new account's keys; then Ethan deletes the old $100k paper account PA3FRQ58C. (2) The 12:30 ET Adjust run used the setup script (no pip installs in its log) and reached `tradermonty.github.io`. (3) Ask Ethan how the new Telegram cards look on his phone.
 - **Current Blockers:**
@@ -28,9 +28,9 @@
   - Open: does Alpaca offer read-only keys for live mode (spec §7.3)?
 - **Must fix before `mode: live`** (fine for paper): exit price from Alpaca FILL activities (now last-seen price); cash ignores open buy orders/margin; Mission Control badge says "Paper money" always.
 - **Known, parked:** trend-sleeve buy crashes the check if the broker returns price 0 (fails safe, ⚠️ alert); a repeating ❌ "failed" order event is sent every check.
-- **Recommended Next Task:** `git pull`, read `notebook/state.json` (week_start_equity, equity_history) and `RemoteTrigger list_runs` → `get_run_log` for the latest routine runs; fix anything they hit; watch for the first paper buy on a green/yellow day (first live use of the new "no buy below 20-day average" guard). Then lay out for Ethan, in plain words, the 3 options from the scoreboard (keep current rules / switch picking to B with the 50-day sell line / lean on SPY) — it's his call; research-upgrade pieces 2–3 (per-stock history + odds, extra layers) wait on that. The 2024→today exam is used: judge further rule changes on paper results, not a re-run.
+- **Recommended Next Task:** Glance at Mission Control after the 9:00 ET plan run on 2026-11-09: it should say "Next update: Mon Nov 9, 12:30 PM" (proves the cloud run renders the new line). Then `git pull`, read `notebook/state.json` (week_start_equity, equity_history) and `RemoteTrigger list_runs` → `get_run_log` for the latest routine runs; fix anything they hit; watch for the first paper buy on a green/yellow day (first live use of the new "no buy below 20-day average" guard). Then lay out for Ethan, in plain words, the 3 options from the scoreboard (keep current rules / switch picking to B with the 50-day sell line / lean on SPY) — it's his call; research-upgrade pieces 2–3 (per-stock history + odds, extra layers) wait on that. The 2024→today exam is used: judge further rule changes on paper results, not a re-run.
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-09*
 
 ---
 

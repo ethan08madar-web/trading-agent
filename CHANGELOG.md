@@ -6,6 +6,11 @@ Notable changes to **this project**, newest first. One dated block per working s
 
 ---
 
+## 2026-11-09
+
+### Added
+- Mission Control shows when it will next update ("Next update: Mon Nov 9, 9:00 AM New York time"), worked out from the routines' cron times (`RUNS_UTC` in `robot/dashboard.py`). Footer now lists the Saturday weekly run too.
+
 ## 2026-11-06
 
 ### Added

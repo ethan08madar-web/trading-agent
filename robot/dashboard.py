@@ -6,6 +6,8 @@ import html
 import json
 import os
 import sys
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from robot.settings import load_settings
 
@@ -106,7 +108,22 @@ def _syms(x):
 
 LIGHT_TEXT = {"green": "Green — up to 4 positions", "yellow": "Yellow — up to 2 positions",
               "red": "Red — no new buys today"}
-SCHEDULE = "Updates after each Claude run: 9:00 plan · 12:30 adjust · 16:30 report (New York time, weekdays)"
+SCHEDULE = ("Updates after each Claude run: 9:00 plan · 12:30 adjust · 16:30 report on weekdays, "
+            "10:00 weekly review on Saturday (New York time)")
+# The routines' cron times in UTC (CLAUDE.md lists them) — change both together, incl. the DST move.
+RUNS_UTC = {wd: [(14, 0), (17, 30), (21, 30)] for wd in range(5)} | {5: [(15, 0)]}
+NY = ZoneInfo("America/New_York")
+
+
+def next_update(now=None):
+    """The next routine run after `now` (UTC), shown in New York time."""
+    now = now or datetime.now(timezone.utc)
+    for days in range(8):
+        day = (now + timedelta(days=days)).date()
+        for h, m in RUNS_UTC.get(day.weekday(), []):
+            run = datetime(day.year, day.month, day.day, h, m, tzinfo=timezone.utc)
+            if run > now:
+                return run.astimezone(NY)
 
 
 def render(nb):
@@ -211,6 +228,8 @@ def render(nb):
     hero = _money(equity) if equity is not None else "—"
     updated = str(st.get("last_check") or "never")[:16].replace("T", " ")
     mode = "Live — you place trades" if cfg.get("mode") == "live" else "Paper money"
+    nxt = next_update()
+    nxt_text = f"{nxt:%a %b} {nxt.day}, {nxt:%I:%M %p}".replace(" 0", " ") + " New York time"
 
     return f"""<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Mission Control</title>
@@ -277,6 +296,7 @@ ul{{list-style:none;padding:0;margin:0}} li{{padding:8px 0;border-bottom:1px sol
 time{{color:var(--muted);font-size:12px;margin-right:8px}}
 details{{margin-top:30px}} summary{{cursor:pointer;font-weight:600}} summary:focus-visible{{outline:2px solid var(--focus);outline-offset:2px}}
 pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 "Geist Mono",monospace;color:var(--muted)}}
+.next{{font-size:13px;color:var(--muted);margin:12px 0 0}} .next b{{color:var(--ink);font-weight:500}}
 footer{{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.6}}
 </style></head><body><main>
 <header><p class="eyebrow">Mission Control {light}</p><span class="badge">{e(mode)}</span></header>
@@ -289,6 +309,7 @@ footer{{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.6}}
 <div class="tile"><span>Positions</span><b>{n_pos} of {max_pos}</b></div>
 <div class="tile"><span>Last check (NY)</span><b>{e(updated[11:] or updated)}</b></div>
 </div>
+<p class="next">🔄 Next update: <b>{e(nxt_text)}</b></p>
 <div class="signal"><div class="lamps" aria-hidden="true">{lamps}</div><div><b>Market light: {e(light_text)}</b><span>Plan {e(d["plan_date"])}</span></div></div>
 <h2>Today's plan</h2>{pick_rows}
 <div class="chips"><span>Buy orders waiting</span>{waiting}</div>

@@ -2,8 +2,9 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
-from robot.dashboard import render, render_markdown
+from robot.dashboard import next_update, render, render_markdown
 
 
 class DashboardTest(unittest.TestCase):
@@ -47,6 +48,16 @@ class DashboardTest(unittest.TestCase):
         for text in ("risks 5.0% to the stop", "reward 2.4× the risk", "▲ +10.00%", "18.2% above stop",
                      "+9.1% to target", "width:67%", "2 of 3", "QQQ", 'data-theme="dark"'):
             self.assertIn(text, page)
+
+    def test_next_update(self):
+        utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
+        cases = [(utc(2026, 11, 9, 13, 0), "2026-11-09 09:00"),   # Mon before plan
+                 (utc(2026, 11, 9, 14, 5), "2026-11-09 12:30"),   # just after plan → adjust
+                 (utc(2026, 11, 13, 22, 0), "2026-11-14 10:00"),  # Fri after report → Sat weekly
+                 (utc(2026, 11, 14, 15, 30), "2026-11-16 09:00")]  # Sat after weekly → Mon plan
+        for now, want in cases:
+            self.assertEqual(next_update(now).strftime("%Y-%m-%d %H:%M"), want)
+        self.assertIn("Next update:", render(tempfile.mkdtemp()))
 
     def test_torn_trades_line_keeps_other_lines(self):
         nb = tempfile.mkdtemp()

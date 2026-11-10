@@ -1,7 +1,7 @@
 name: robot
 on:
   schedule:
-    - cron: "*/15 13-21 * * 1-5"   # 13:00–21:45 UTC = 8:00–16:45 EST / 9:00–17:45 EDT; covers market hours in both; Robot exits fast when closed
+    - cron: "7,22,37,52 13-21 * * 1-5"   # off the :00/:15 rush (GitHub drops busy-minute runs); 13:07–21:52 UTC = 8:07–16:52 EST / 9:07–17:52 EDT; covers market hours in both; Robot exits fast when closed
   workflow_dispatch:
     inputs:
       dry_run:

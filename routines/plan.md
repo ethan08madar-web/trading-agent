@@ -18,24 +18,26 @@ You are the research half of trading-agent. First read `CLAUDE.md` and
    `notebook/trades.jsonl`, and the newest file in `notebook/diary/`.
 2. Market light: run `market-breadth-analyzer`, plus `uptrend-analyzer` or `market-top-detector` if
    calls allow. Choose `green`/`yellow`/`red` and `light_falling` (true if breadth is weakening).
-3. If red → no picks. Otherwise find up to 6 swing candidates with `vcp-screener`,
-   `canslim-screener` or `stockbee-momentum-burst-screener`. Note each one's pivot and stop
-   if the screener gives them (`vcp-screener` does). Then check them all in one go — and add
-   every held symbol to the same command for step 4:
+3. If red → no picks. Otherwise use **rulebook B** (Ethan chose it 2026-11-13; the scoreboard's
+   most steady one): market leaders in an uptrend that have dipped back to just above their
+   20-day average. Gather up to 12 strong candidates (`canslim-screener`, `vcp-screener`, or
+   `uptrend-analyzer` leaders) — the strongest names, not ones already far above their
+   20-day line. Then check them all in one go — and add every held symbol to the same
+   command for step 4:
    `python -m robot.research SYM1 SYM2 ...` (1 FMP call in total)
    - `DROP` lines: leave that stock out (earnings within 3 trading days — any company size —
      bad or missing price data, earnings unknown because FMP is unreachable, or price below
-     its 20-day average — the Robot won't buy those because its close-of-day rule would sell them). Don't
-     second-guess a DROP.
+     its 20-day average) and the rulebook-B checks (under a year of history, not in an
+     uptrend, or more than 3% above the 20-day average — not on a dip). Don't second-guess a DROP.
    - `KEEP` lines give the last close, 20/50-day averages, 10-day low, 20-day high, and a
-     default entry_max / stop / target. Use the screener's pivot and stop when it gives them;
-     otherwise start from the defaults. You may raise the stop or lower entry_max, never the
+     default entry_max / stop / target, and a `strength` (6- and 12-month return). Use the
+     defaults — they are rulebook B's levels (buy up to +1%, stop under the 10-day low). You may raise the stop or lower entry_max, never the
      other way. Rules: stop below entry_max and within 15% of it; target at least 2× the risk.
      A KEEP marked "stop is over 15% below" needs a closer real support level, or drop it.
    - Do not use `earnings-calendar` (it skips companies under $2B), `data-quality-checker`
      (it checks written reports, not prices) or `technical-analyst` (it needs chart images)
      for this step.
-   - Keep the best 4, ordered best first, each with a one-line `reason`.
+   - Keep the 4 KEEPs with the highest `strength`, ordered strongest first, each with a one-line `reason`.
 4. Held positions (`state.json` → `positions`), from the same `robot.research` output:
    - earnings within 2 days → put it in `sell_earnings`
    - a better stop (higher only) → put it in `stops`

@@ -79,8 +79,8 @@ def run(book, X, days, lights, leaders, members_by_day, s, start_cash=1000.0):
             why = safety.exit_reason(m, lo, hi, c, x[book.get("exit_avg", "sma20")][j])
             if why == "stop":
                 close_out(sym, m, min(op, m["stop"]) * (1 - SLIP), day, "stop")
-            elif why == "avg20":
-                close_out(sym, m, c * (1 - SLIP), day, "below 20-day average")
+            elif why == "avg":
+                close_out(sym, m, c * (1 - SLIP), day, f"below {book.get('exit_avg', 'sma20')[3:]}-day average")
             elif why == "target":
                 half = safety.round_qty(m["qty"] / 2)
                 if half > 0:

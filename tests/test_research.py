@@ -14,6 +14,12 @@ def bars(n=60, close=100.0, last_day=date(2026, 11, 5)):
     return out
 
 
+def rising(n=260):
+    """A steady uptrend: close > 50-day > 200-day, last price just above the 20-day average."""
+    return [{"t": (date(2026, 11, 5) - timedelta(days=n - 1 - i)).isoformat() + "T05:00:00Z",
+             "h": 52 + 0.2 * i, "l": 48 + 0.2 * i, "c": 50 + 0.2 * i} for i in range(n)]
+
+
 class FakeBroker:
     def __init__(self, price=100.0, history=None, fail=False):
         self.price, self.history, self.fail = price, history if history is not None else bars(), fail
@@ -69,15 +75,21 @@ class TestLevels(unittest.TestCase):
 
 class TestCheck(unittest.TestCase):
     def test_keep_and_drop(self):
-        out = check(["AAA", "ERN"], FakeBroker(), [{"symbol": "ERN", "date": "2026-11-09"}], FRI)
-        self.assertTrue(out[0].startswith("KEEP AAA: last $100.00"))
+        out = check(["AAA", "ERN"], FakeBroker(price=101.8, history=rising()),
+                    [{"symbol": "ERN", "date": "2026-11-09"}], FRI)
+        self.assertTrue(out[0].startswith("KEEP AAA: strength +"), out[0])
+        self.assertIn("last $101.80", out[0])
         self.assertEqual(out[1], "DROP ERN: earnings 2026-11-09")
 
     def test_below_20_day_average_is_dropped(self):
-        # the Robot won't buy under the 20-day average (its close-of-day rule would sell it)
         out = check(["AAA"], FakeBroker(price=95.0), [], FRI)
         self.assertEqual(out, ["DROP AAA: $95.00 is below its 20-day average $100.00"
-                               " — the Robot would sell it at the close"])
+                               " — rulebook B only buys dips that hold above it"])
+
+    def test_rulebook_b_filters(self):
+        self.assertIn("needs a year", check(["A"], FakeBroker(), [], FRI)[0])           # 60 bars only
+        self.assertIn("not in an uptrend", check(["A"], FakeBroker(history=bars(260)), [], FRI)[0])
+        self.assertIn("not on a dip", check(["A"], FakeBroker(price=106.0, history=rising()), [], FRI)[0])
 
     def test_no_fmp_drops_everything(self):
         out = check(["AAA"], FakeBroker(), None, FRI)

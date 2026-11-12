@@ -90,14 +90,21 @@ class ExitTest(unittest.TestCase):
         self.assertEqual(st["positions"]["ABC"]["stop"], 50.0)
         self.assertTrue(st["positions"]["ABC"]["half_sold"])
 
-    def test_below_20_day_average_only_at_close(self):
-        b = FakeBroker({"ABC": 49.0}, [holding()], closes={"ABC": [52.0] * 20})
+    def test_below_50_day_average_only_at_close(self):
+        b = FakeBroker({"ABC": 49.0}, [holding()], closes={"ABC": [52.0] * 50})
         o = FakeOrders()
         run_check(S, OPEN, plan(), [], state_with(positions={"ABC": meta()}), b, o)
         self.assertNotIn(("sell", "ABC", 4.0), o.calls)
         o = FakeOrders()
         run_check(S, LATE, plan(), [], state_with(positions={"ABC": meta()}), b, o)
         self.assertIn(("sell", "ABC", 4.0), o.calls)
+
+    def test_below_20_day_but_above_50_day_holds(self):
+        # rulebook B: a dip under the 20-day line is not a sell; only the 50-day line is
+        b = FakeBroker({"ABC": 49.0}, [holding()], closes={"ABC": [40.0] * 30 + [52.0] * 20})
+        o = FakeOrders()
+        run_check(S, LATE, plan(), [], state_with(positions={"ABC": meta()}), b, o)
+        self.assertNotIn(("sell", "ABC", 4.0), o.calls)
 
     def test_earnings_sell_and_plan_stop_only_moves_up(self):
         o = FakeOrders()

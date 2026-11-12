@@ -20,6 +20,25 @@ EARNINGS_DAYS = 3      # don't buy with earnings within 3 trading days (spec §4
 MIN_BARS = 50          # enough history for the 50-day average
 MAX_GAP = 0.10         # latest price this far from the last close = data we don't trust
 MAX_STOP = 0.15        # stop more than 15% below entry is refused by the Robot
+YEAR = 253             # rulebook B: 12-month strength and the 200-day average need a year of bars
+DIP = 0.03             # rulebook B: buy only within 3% above the 20-day average
+
+
+def rulebook_b(price, bars):
+    """(why it isn't a rulebook-B buy or None, strength). B = backtest/rulebooks.py pullback():
+    a leader in an uptrend (close > 50-day > 200-day) dipped to within 3% above its 20-day average.
+    Strength = average of the 6- and 12-month returns (backtest/indicators.py "rs"); higher is better.
+    ponytail: "leader" is top 10% of the S&P 500 in the backtest; here Claude ranks candidates by strength."""
+    c = [b["c"] for b in bars]
+    if len(c) < YEAR:
+        return f"only {len(c)} days of history (rulebook B needs a year)", None
+    s20, s50, s200 = (sum(c[-n:]) / n for n in (20, 50, 200))
+    strength = 0.5 * (c[-1] / c[-127] - 1) + 0.5 * (c[-1] / c[-253] - 1)
+    if not c[-1] > s50 > s200:
+        return "not in an uptrend (needs close > 50-day avg > 200-day avg)", strength
+    if price > s20 * (1 + DIP):
+        return f"not on a dip (${price:.2f} is over 3% above its 20-day average ${s20:.2f})", strength
+    return None, strength
 
 
 def window_end(today, trading_days=EARNINGS_DAYS):
@@ -86,7 +105,7 @@ def check(symbols, broker, earnings_rows, today):
             continue
         try:
             price = broker.latest_price(sym)
-            bars = broker.daily_bars(sym, 60, today.isoformat())
+            bars = broker.daily_bars(sym, YEAR, today.isoformat())
         except Exception as e:  # no exception text: it can contain URLs
             lines.append(f"DROP {sym}: price data not reachable ({type(e).__name__})")
             continue
@@ -97,10 +116,14 @@ def check(symbols, broker, earnings_rows, today):
         v = levels(price, bars)
         if price < v["sma20"]:
             lines.append(f"DROP {sym}: ${price:.2f} is below its 20-day average ${v['sma20']:.2f}"
-                         " — the Robot would sell it at the close")
+                         " — rulebook B only buys dips that hold above it")
+            continue
+        why, strength = rulebook_b(price, bars)
+        if why:
+            lines.append(f"DROP {sym}: {why}")
             continue
         note = "" if v["stop_ok"] else "  (default stop is over 15% below: needs a closer stop or DROP)"
-        lines.append(f"KEEP {sym}: last ${v['last']:.2f} · 20d avg ${v['sma20']:.2f} · 50d avg ${v['sma50']:.2f}"
+        lines.append(f"KEEP {sym}: strength {strength:+.0%} · last ${v['last']:.2f} · 20d avg ${v['sma20']:.2f} · 50d avg ${v['sma50']:.2f}"
                      f" · 10d low ${v['low10']:.2f} · 20d high ${v['high20']:.2f}"
                      f" · default entry_max {v['entry_max']:.2f} stop {v['stop']:.2f}"
                      f" target {v['target']:.2f}{note}")

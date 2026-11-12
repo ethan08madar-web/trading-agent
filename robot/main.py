@@ -154,14 +154,15 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=
             m["stop"] = new_stop  # stops only ever move up
         if m["stop"] is None:  # every check, so it cannot go quiet
             ev("problem", sym, f"⚠️ {sym}: no stop on record for this position — check it")
-        avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20) if end_of_day else None
-        why = safety.exit_reason(m, price, price, price, avg20, sym in plan["sell_earnings"])
+        # Rulebook B (Ethan, 2026-11-13): sell line is the 50-day average; the 20-day one cut winners short.
+        avg50 = safety.sma(broker.daily_closes(sym, 50, today), 50) if end_of_day else None
+        why = safety.exit_reason(m, price, price, price, avg50, sym in plan["sell_earnings"])
         if why == "stop":
             sell(sym, qty, f"stop ${m['stop']:.2f} hit", "🛑", price)
         elif why == "earnings":
             sell(sym, qty, "earnings within 2 days", "📅", price)
-        elif why == "avg20":
-            sell(sym, qty, "below its 20-day average at the close", "📉", price)
+        elif why == "avg":
+            sell(sym, qty, "below its 50-day average at the close", "📉", price)
         elif why == "target":
             half = safety.round_qty(qty / 2)
             if half <= 0 or sell(sym, half, f"target ${m['target']:.2f} hit, stop now at entry ${m['entry']:.2f}",
@@ -240,7 +241,7 @@ def run_check(settings, clock, plan, plan_errors, state, broker, orders, events=
                 continue  # not at our price yet (or already through the stop); try again next check
             avg20 = safety.sma(broker.daily_closes(sym, 20, today), 20)
             if avg20 and price < avg20:
-                continue  # the close-of-day 20-day rule would sell it the same day (backtest, 2026-11-06)
+                continue  # rulebook B buys dips that still hold above the 20-day average
             buy(sym, qty, k["entry_max"], f", stop ${k['stop']:.2f}", {"stop": k["stop"], "target": k["target"]})
 
     state["last_check"] = now.isoformat()

@@ -48,7 +48,7 @@ A swing-trading assistant for Ethan (small account, under $1,000 real money late
   - Pause all new buys after −5% in a week or 3 losses in a row.
 - Market light: 🟢 up to 4 positions · 🟡 up to 2, nothing new if turning down · 🔴 no new buys.
 - Trend sleeve: hold SPY (≤30%) when light is green and SPY > 50-day average; sell when it closes below.
-- Exits (defaults, Ethan can change): stop hit → sell; close below 20-day average → sell; earnings within 2 days → sell; target hit → sell half, move stop to entry.
+- Exits (defaults, Ethan can change): stop hit → sell; close below **50-day** average → sell (rulebook B, 2026-11-13; was 20-day); earnings within 2 days → sell; target hit → sell half, move stop to entry.
 - Skip stocks with earnings in the next few days.
 - Never buy below the 20-day average (Robot guard + research DROP, 2026-11-06): the close-of-day 20-day sell rule would dump it the same day. Ethan approved after the scoreboard found ~half of today's-bot trades did this.
 - No personalised investment advice — rules are Ethan's choices; Claude explains options.
@@ -107,6 +107,7 @@ Keys go in a gitignored `.env` (Ethan enters them himself) and as cloud network 
 | 2026-11-06 | Routines run with connectors cleared | The server attaches Gmail/Drive/Calendar by default; trading jobs read untrusted web data and must not reach email | Default connectors |
 | 2026-11-06 | Mission Control: broker-style page (big value, scrub chart, lamps), original design; always dark (Ethan asked) — light tokens kept under `data-theme="light"` | Ethan asked for a Robinhood-like look; copying a real brand's look is out, the genre layout is fine | Literal Robinhood copy; old tables |
 | 2026-11-06 | Scoreboard on Yahoo data + past S&P 500 members; tune 2019–2023, one-time exam 2024→today (now used); 50-day sell line chosen on tune years | Ethan: "do what will perform best… we'll test it"; holdout guards against fitting the past | Alpaca data (keys not on PC); gap-based earnings guess (would look like a rule without being one); re-tuning after the exam |
+| 2026-11-13 | Switch picking + exits to scoreboard rulebook B (leaders dipped to within 3% above 20-day avg; sell below 50-day) | Ethan's pick after a week of no buys; B was the most consistent rulebook. `robot/research.py` `rulebook_b()` DROPs non-B stocks; "leader" = Claude ranks by 6/12-month strength (no S&P-wide scan in the cloud) | Keep today's rules; allow 1 buy on yellow-falling (B still obeys the light — 0 buys on yellow-falling) |
 | 2026-11-06 | Robot sends one Telegram card per check | Several events per check were several texts; one card is easier to read | One text per event |
 
 ## Implementation Notes

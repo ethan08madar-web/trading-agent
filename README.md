@@ -43,14 +43,11 @@ The idea is that most stocks follow the market, so you don't buy when the tide i
 
 ### Step 2: Find candidates
 
-If the light isn't red, Claude runs "screeners." A screener is a filter that scans many
-stocks for a pattern:
-
-- **VCP**: a stock that has been calming down, with its price swings getting smaller, just before a possible jump.
-- **CANSLIM**: a well-known checklist for strong, growing companies whose stock is leading the market.
-- **Momentum burst**: a stock that just made a strong move up.
-
-It picks up to 6 candidates.
+If the light isn't red, Claude follows **rulebook B** (Ethan's choice, 2026-11-13): find
+market **leaders** (stocks that rose the most over the last 6 and 12 months) that are in an
+uptrend and have **dipped back** to just above their 20-day average. It uses "screeners"
+(filters that scan many stocks, like CANSLIM for strong, growing companies) to gather up to
+12 strong candidates.
 
 ### Step 3: Safety-check each candidate ([robot/research.py](robot/research.py))
 
@@ -60,6 +57,8 @@ A small script checks every candidate and says **KEEP** or **DROP**. It drops a 
   stock jump or crash overnight, which is too much of a gamble.
 - **The price data looks broken**: missing prices, less than 50 days of history, old data, or
   today's price more than 10% away from yesterday's.
+- **It isn't a rulebook-B dip**: under a year of history, not in an uptrend (price above the
+  50-day average, which is above the 200-day), below its 20-day average, or more than 3% above it.
 
 For each stock it keeps, it works out three prices:
 
@@ -74,7 +73,7 @@ The stop can't be more than 15% below the entry, and Claude may only make the pl
 
 ### Step 4: Choose the best 4
 
-Claude keeps the best 4, each with a one-line reason. The plan is then checked by
+Claude keeps the 4 strongest KEEPs (by 6- and 12-month gain), each with a one-line reason. The plan is then checked by
 [robot/plan.py](robot/plan.py). If the plan is broken, it counts as "no plan" and the Robot
 only manages the stocks it already holds.
 
@@ -88,8 +87,8 @@ Every 15 minutes, for each stock in the plan, the Robot ([robot/main.py](robot/m
 2. Is there room? (Under the light's limit: 4, 2 or 0 stocks.)
 3. Is the price **between the stop and the "buy up to" price**? If the price is too high,
    wait and check again in 15 minutes.
-4. Is the price **above the stock's 20-day average**? If not, skip it: the 4 PM sell rule
-   would sell it the same day (the scoreboard found this clash on 2026-11-06). If yes, buy.
+4. Is the price **above the stock's 20-day average**? If not, skip it: rulebook B buys
+   strong stocks that dipped *to* that line, not ones that fell through it. If yes, buy.
 5. **How much to buy?** It takes the *smallest* of three limits ([robot/safety.py](robot/safety.py)):
    - If the stop is hit, you lose **no more than 1%** of the account.
    - No single stock is **more than 30%** of the account.
@@ -126,7 +125,7 @@ For every stock it owns, the Robot checks these rules in this order:
 |---|---|---|
 | 🛑 Price falls to the **stop** | Sell everything | Cut the loss while it's small |
 | 📅 **Earnings within 2 days** | Sell everything | Avoid the overnight gamble |
-| 📉 Closes **below its 20-day average** (checked at end of day) | Sell everything | The upward trend looks broken |
+| 📉 Closes **below its 50-day average** (checked at end of day) | Sell everything | The upward trend looks broken (rulebook B, since 2026-11-13; was the 20-day line, which sold winners too early) |
 | 🎯 Price reaches the **target** | Sell **half**, and move the stop up to the price paid | Lock in profit; the other half now can't turn into a loss |
 
 Two more things:
@@ -187,7 +186,7 @@ python -m backtest.run --final   # also the hidden years
 passed. Just holding SPY made the most money in both periods. The most consistent stock-picker
 was **B** (profitable in both periods, smaller drops than SPY, but about half SPY's return). The
 replay also found that today's bot can buy a stock under its 20-day average and sell it at the
-same day's close. The 2024 → today exam has now been used, so later changes need a fresh one
+same day's close. **Ethan switched the bot to B on 2026-11-13.** The 2024 → today exam has now been used, so later changes need a fresh one
 (more time passing, or paper results).
 
 Free data, no keys: Yahoo daily prices and the list of past S&P 500 members

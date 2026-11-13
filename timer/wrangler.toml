@@ -1,0 +1,10 @@
+name = "trading-robot-timer"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+# No public URL: the timer is only started by the schedule.
+workers_dev = false
+
+# GitHub's own schedule dropped almost every run (12 runs in a week, 2026-11-06..12).
+# Cloudflare cron is on time; it asks GitHub to start robot.yml. UTC, covers market hours in EST and EDT.
+[triggers]
+crons = ["7,22,37,52 13-21 * * MON-FRI"]

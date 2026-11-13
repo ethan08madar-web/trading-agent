@@ -8,3 +8,4 @@ mission-control.html
 
 # backtest price cache (re-downloadable)
 backtest/cache/
+.wrangler/

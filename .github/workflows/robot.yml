@@ -1,7 +1,7 @@
 name: robot
 on:
-  schedule:
-    - cron: "7,22,37,52 13-21 * * 1-5"   # off the :00/:15 rush (GitHub drops busy-minute runs); 13:07–21:52 UTC = 8:07–16:52 EST / 9:07–17:52 EDT; covers market hours in both; Robot exits fast when closed
+  # Started every 15 min by the Cloudflare timer in timer/ (7,22,37,52 13-21 UTC Mon-Fri) with dry_run=false.
+  # GitHub's own schedule ran only 12 times in the week of 2026-11-06, so it was removed.
   workflow_dispatch:
     inputs:
       dry_run:
